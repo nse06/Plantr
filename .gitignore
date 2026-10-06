@@ -45,3 +45,6 @@ next-env.d.ts
 *.db-journal
 *.db-wal
 *.db-shm
+
+# allow the example env file
+!.env.example

@@ -89,6 +89,14 @@ export function spaceUnits(plant: Plant, qty: number, input: PlanInput): number 
   return per > 0 ? Math.ceil(qty / per) : Infinity;
 }
 
+/** In container-only gardens, plant in whole pots (no pot with a single lonely spinach). */
+export function roundToPots(plant: Plant, qty: number, input: PlanInput): number {
+  if (input.areas.some((a) => a.kind === "bed")) return qty;
+  const per = plantsPerPot(plant, maxPotGallons(input.areas));
+  if (per <= 1) return qty;
+  return Math.max(per, Math.round(qty / per) * per);
+}
+
 export function capacityUnits(input: PlanInput): number {
   const sq = plantableSqFt(input.areas);
   // Pots count as roughly one square foot each when mixed with beds.
@@ -284,12 +292,13 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
       if (group && chosen.filter((x) => group.ids.includes(x.plant.id)).length >= group.max) return false;
       if (p.category === "herb" && chosen.filter((x) => x.plant.category === "herb").length >= herbCap) return false;
     }
-    let qty = defaultQuantity(p, input.household);
+    let qty = roundToPots(p, defaultQuantity(p, input.household), input);
     const left = capacity - used;
     const min = minimumQuantity(p);
     while (qty > min && spaceUnits(p, qty, input) > left) {
       qty = p.perSqFt >= 1 && qty > p.perSqFt ? qty - p.perSqFt : qty - 1;
     }
+    qty = Math.min(qty, roundToPots(p, qty, input));
     const units = spaceUnits(p, qty, input);
     if (units > left) {
       if (isWanted) skipped.push({ name: p.name, reason: "There wasn't room for it alongside everything else." });
@@ -417,7 +426,7 @@ export function normalizeDesign(design: Design, input: PlanInput, evaluation: Ca
       if (!skipped.some((s) => s.name === plant.name)) skipped.push({ name: plant.name, reason });
       continue;
     }
-    const qty = Math.max(minimumQuantity(plant), Math.min(200, Math.round(sel.quantity)));
+    const qty = roundToPots(plant, Math.max(minimumQuantity(plant), Math.min(200, Math.round(sel.quantity))), input);
     const prev = merged.get(plant.id);
     if (prev) prev.quantity += qty;
     else merged.set(plant.id, { ...sel, quantity: qty, variety: sel.variety || plant.varieties[0] || "" });
@@ -495,9 +504,10 @@ export function growToFill(selections: PlantSelection[], input: PlanInput, alrea
       for (const sel of selections) {
         const p = PLANTS_BY_ID[sel.plantId];
         if (!p || p.category === "flower" || used >= goal || p.perSqFt < 1 !== bigPlants) continue;
-        const step = p.perSqFt >= 1 ? p.perSqFt : 1;
+        const per = input.areas.some((a) => a.kind === "bed") ? 0 : plantsPerPot(p, maxPotGallons(input.areas));
+        const step = per > 1 ? per : p.perSqFt >= 1 ? p.perSqFt : 1;
         const next = sel.quantity + step;
-        if (next > maxQuantity(p, input.household)) continue;
+        if (next > Math.max(maxQuantity(p, input.household), per)) continue;
         const delta = spaceUnits(p, next, input) - spaceUnits(p, sel.quantity, input);
         if (used + delta > capacity) continue;
         sel.quantity = next;

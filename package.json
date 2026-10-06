@@ -3,10 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "npm run db:migrate && next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "vercel-build": "npm run db:migrate && next build",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run lint && npm run typecheck && npm run test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "data:climate": "python3 -I scripts/build_climate_data.py"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
@@ -30,5 +37,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=20.9"
   }
 }
