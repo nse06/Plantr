@@ -127,7 +127,7 @@ npm run build        # production build
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | AI features | Photo analysis, AI design, Ask Plantr. Without it, everything else still works. |
 | `PLANTR_MODEL` | Optional | Defaults to `claude-opus-5-5`. |
-| `DATABASE_URL` / `DATABASE_AUTH_TOKEN` | Production | Turso URL and token. Defaults to `file:local.db`. |
+| `DATABASE_URL` / `DATABASE_AUTH_TOKEN` | Production | Turso URL and token (the Vercel Turso integration's `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` also work). Defaults to `file:local.db`. |
 | `AUTH_SECRET` | Production | Signs unsubscribe links. `openssl rand -base64 32`. |
 | `APP_URL` | Production | Public URL used in emailed links. Never derived from request headers in production. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Production | Sign-in links and the weekly digest. Use a verified sending domain. |

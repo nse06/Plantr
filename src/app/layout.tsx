@@ -10,7 +10,10 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "sw
 const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(
+    process.env.APP_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "http://localhost:3000"),
+  ),
   title: { default: "Plantr: your garden, planned", template: "%s · Plantr" },
   description:
     "Snap a photo of your space, tell us what you want to grow, and Plantr tells you exactly what to plant, where to put it, and when to do it.",
