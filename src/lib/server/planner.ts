@@ -1,5 +1,5 @@
 import type { Area, GardenPlan, PlanInput } from "@/lib/garden/types";
-import { getClimate } from "@/lib/garden/climate";
+import { getClimate } from "@/lib/server/climate";
 import { addDays, todayISO } from "@/lib/garden/dates";
 import { buildPlan, planContext } from "@/lib/garden/plan";
 import { designWithRules } from "@/lib/garden/recommend";

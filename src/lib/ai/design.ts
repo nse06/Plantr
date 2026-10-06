@@ -69,6 +69,12 @@ function situation(input: PlanInput, ctx: SeasonContext, evaluation: CatalogEval
         ? "Essentially frost-free; summer heat is the main limit."
         : `Average last spring frost ~${fmtMMDD(c.lastFrost)}, first fall frost ~${fmtMMDD(c.firstFrost)} (about ${seasonLengthDays(c)} frost-free days).`),
   );
+  if (c.tmin && c.tmax) {
+    lines.push(
+      `Typical temperatures: July highs ~${c.tmax[6]}°F with lows ~${c.tmin[6]}°F; January lows ~${c.tmin[0]}°F` +
+        (c.station ? ` (NOAA normals, ${c.station.name}).` : "."),
+    );
+  }
   lines.push(`Plan for: ${ctx.season === "fall" ? `fall ${ctx.year}` : `the ${ctx.year} spring/summer season`}.`);
   const bedText = beds.length
     ? beds.map((b) => (b.kind === "bed" ? `${b.widthFt}×${b.lengthFt} ft ${b.raised ? "raised bed" : "in-ground plot"}` : "")).join(", ")
@@ -127,11 +133,12 @@ export async function designWithAI(input: PlanInput, ctx: SeasonContext, evaluat
   const client = getClient();
   if (!client || evaluation.feasible.length === 0) return null;
 
-  const ids = evaluation.feasible.map((c) => c.plant.id) as [string, ...string[]];
+  // Plant ids are validated by the engine (normalizeDesign drops unknown or infeasible ones),
+  // so one bad id can't invalidate the whole design.
   const DesignSchema = z.object({
     selections: z.array(
       z.object({
-        plantId: z.enum(ids),
+        plantId: z.string().describe("An id from the list of plants that work this season."),
         quantity: z.number().describe("Number of plants."),
         variety: z.string().describe("A specific recommended variety."),
         reason: z.string().describe("1–2 sentences on why this plant, for this person."),

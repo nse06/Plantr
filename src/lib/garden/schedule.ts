@@ -1,6 +1,7 @@
 import type { Climate, Plant, PlanSeason, PlantSchedule } from "./types";
 import { addDays, addWeeks, diffDays, maxISO, minISO, mmddToISO } from "./dates";
 import { parseZone } from "./climate";
+import { firstDayWhere } from "./temps";
 
 /** How long each frost class keeps producing after the average first fall frost. */
 const FROST_TOLERANCE_DAYS: Record<Plant["frost"], number> = {
@@ -14,6 +15,23 @@ const FALL_FACTOR_DAYS = 14;
 
 /** Days needed after "today" to buy supplies before planting. */
 const LEAD_DAYS = 3;
+
+// Temperature rules (applied when NOAA normals are available for the ZIP code).
+/** Warm-season crops sulk and stall until nights stay above this. */
+const WARM_NIGHT_F = 50;
+const HEAT_LOVER_NIGHT_F = 55;
+const HEAT_LOVERS = new Set(["okra", "cantaloupe", "watermelon"]);
+/** Cool-season crops bolt (go to seed, turn bitter) once days are this hot. */
+const BOLT_HEAT_F = 85;
+const BOLTERS = new Set(["lettuce", "spinach", "arugula", "cilantro", "bok-choy", "radish", "snap-peas", "broccoli", "dill"]);
+/** Tomatoes, peppers and beans drop their flowers when nights stay this warm. */
+const HOT_NIGHT_F = 75;
+const FRUIT_SETTERS = new Set(["tomato", "cherry-tomato", "paste-tomato", "bell-pepper", "hot-pepper", "bush-beans", "pole-beans"]);
+
+function temps(ctx: SeasonContext): { tmin: number[]; tmax: number[] } | null {
+  const { tmin, tmax } = ctx.climate;
+  return tmin?.length === 12 && tmax?.length === 12 ? { tmin, tmax } : null;
+}
 
 export interface SeasonContext {
   season: PlanSeason;
@@ -125,6 +143,21 @@ function springSchedule(plant: Plant, ctx: SeasonContext): ScheduleResult {
   let plantOut = addWeeks(lf, plant.plantOutWeeks);
   let startIndoors =
     plant.method === "transplant" && plant.indoorWeeks ? addWeeks(lf, -plant.indoorWeeks) : undefined;
+  const t = temps(ctx);
+
+  // Warm-season crops wait for warm nights, not just the last frost. This matters most in
+  // cool-summer climates (Pacific Northwest, coastal California), where the last frost
+  // comes early but nights stay chilly into May.
+  if (t && plant.season === "warm" && plant.frost === "tender" && plant.category !== "flower") {
+    const need = HEAT_LOVERS.has(plant.id) ? HEAT_LOVER_NIGHT_F : WARM_NIGHT_F;
+    const warm = firstDayWhere(t.tmin, `${ctx.year}-01-01`, `${ctx.year}-09-30`, (v) => v >= need);
+    if (!warm) return fail(`Nights here rarely stay above ${need}°F, which ${plant.name.toLowerCase()} needs to grow well.`);
+    if (warm > plantOut) {
+      const shift = diffDays(plantOut, warm);
+      plantOut = warm;
+      if (startIndoors) startIndoors = addDays(startIndoors, shift);
+    }
+  }
 
   const earliest = addDays(today, LEAD_DAYS);
   if (plantOut < earliest) {
@@ -150,10 +183,33 @@ function springSchedule(plant: Plant, ctx: SeasonContext): ScheduleResult {
     warnings.push("Your season is tight for this one. Choose a fast-maturing variety and plant on time.");
   }
 
+  // Summer heat: cool-season crops bolt, and fruiting crops stop setting fruit on hot nights.
+  let heatCap: string | null = null;
+  if (t && BOLTERS.has(plant.id)) {
+    const heat = firstDayWhere(t.tmax, addDays(lf, -30), `${ctx.year}-09-30`, (v) => v >= BOLT_HEAT_F);
+    if (heat) {
+      if (harvestStart > addDays(heat, 3)) {
+        return fail(`Summer heat arrives before ${plant.name.toLowerCase()} is ready in spring. It's a great fall crop here.`);
+      }
+      heatCap = addDays(heat, 10);
+    }
+  }
+  if (t && FRUIT_SETTERS.has(plant.id)) {
+    const hot = firstDayWhere(t.tmin, plantOut, `${ctx.year}-10-31`, (v) => v >= HOT_NIGHT_F);
+    if (hot) {
+      if (harvestStart >= addDays(hot, -7)) {
+        return fail(`Summer nights here get too warm for ${plant.name.toLowerCase()} to set fruit. Plant it in late summer for a fall crop.`);
+      }
+      heatCap = addDays(hot, 14);
+      warnings.push("Hot summer nights pause fruiting here. Plants often start producing again as fall cools down.");
+    }
+  }
+
   const successions: string[] = [];
   if (plant.succession) {
-    const cutoff =
+    let cutoff =
       plant.season === "cool" ? addWeeks(lf, 5) : addDays(ff, -(plant.dtm + 7 + FROST_TOLERANCE_DAYS[plant.frost]));
+    if (heatCap) cutoff = minISO(cutoff, addDays(heatCap, -(plant.dtm + 7)));
     let d = addWeeks(plantOut, plant.succession);
     while (d <= cutoff && successions.length < 4) {
       successions.push(d);
@@ -164,13 +220,18 @@ function springSchedule(plant: Plant, ctx: SeasonContext): ScheduleResult {
   const lastSow = successions.length ? successions[successions.length - 1] : plantOut;
   const harvestEnd = minISO(
     kill,
+    heatCap ?? kill,
     maxISO(addWeeks(harvestStart, plant.harvestWeeks), addWeeks(addDays(lastSow, plant.dtm), plant.harvestWeeks)),
   );
 
   let fallSow: string | undefined;
   if (plant.fall && plant.season === "cool" && !ctx.climate.frostFree) {
-    const d = addDays(ff, -(plant.dtm + FALL_FACTOR_DAYS));
-    if (d > addWeeks(lf, 8)) fallSow = d;
+    let d = addDays(ff, -(plant.dtm + FALL_FACTOR_DAYS));
+    if (t && BOLTERS.has(plant.id)) {
+      const cool = firstDayWhere(t.tmax, `${ctx.year}-07-01`, `${ctx.year}-12-31`, (v) => v < BOLT_HEAT_F);
+      if (cool) d = maxISO(d, addDays(cool, -21));
+    }
+    if (d > addWeeks(lf, 8) && addDays(d, plant.dtm + FALL_FACTOR_DAYS) <= kill) fallSow = d;
   }
 
   return {
@@ -224,6 +285,18 @@ function fallSchedule(plant: Plant, ctx: SeasonContext): ScheduleResult {
   const kill = addDays(ff, FROST_TOLERANCE_DAYS[plant.frost]);
   const extra = plant.frost === "tender" ? 7 : 0;
   let plantOut = addDays(ff, -(plant.dtm + FALL_FACTOR_DAYS + extra));
+
+  // In hot climates, wait for the heat to break before planting fall crops.
+  const t = temps(ctx);
+  if (t && BOLTERS.has(plant.id)) {
+    const cool = firstDayWhere(t.tmax, `${ctx.year}-07-01`, `${ctx.year}-12-31`, (v) => v < BOLT_HEAT_F);
+    if (cool) plantOut = maxISO(plantOut, addDays(cool, -21));
+  }
+  if (t && FRUIT_SETTERS.has(plant.id)) {
+    const mild = firstDayWhere(t.tmin, `${ctx.year}-07-01`, `${ctx.year}-12-31`, (v) => v < HOT_NIGHT_F);
+    if (mild) plantOut = maxISO(plantOut, addDays(mild, -21));
+  }
+
   let startIndoors = plant.method === "transplant" ? addWeeks(plantOut, -6) : undefined;
   let mustBuyStarts = false;
 

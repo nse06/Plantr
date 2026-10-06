@@ -6,20 +6,27 @@ import { FALLBACK_BETA, MODEL, getClient, logAiError } from "./client";
 // Reads a photo of someone's yard, patio or balcony and estimates what the planner needs:
 // what kind of space it is, roughly how big, and how much sun it gets.
 
+// Enumerations are plain strings here and normalized below: one slightly-off value from the
+// model (e.g. "partial sun") shouldn't throw away an otherwise good analysis.
 const PhotoSchema = z.object({
   isGardenSpace: z.boolean().describe("False if the photo is not an outdoor space someone could garden in."),
-  spaceType: z.enum(["in-ground", "raised-bed", "containers", "mixed"]),
+  spaceType: z.string().describe('One of: "in-ground", "raised-bed", "containers", "mixed".'),
   widthFt: z.number().describe("Estimated width of the plantable area (or of one existing bed), in feet."),
   lengthFt: z.number().describe("Estimated length of the plantable area (or of one existing bed), in feet."),
   bedCount: z.number().describe("Existing beds visible, or beds we suggest creating for in-ground space."),
   containerCount: z.number().describe("Containers visible or that would comfortably fit (0 if not a container space)."),
-  sun: z.enum(["full", "partial", "shade"]),
+  sun: z.string().describe('One of: "full" (6+ hours of direct sun), "partial" (4-6 hours), "shade" (under 4 hours).'),
   sunReason: z.string().describe("One short sentence on the evidence for the sun estimate."),
-  confidence: z.enum(["low", "medium", "high"]),
+  confidence: z.string().describe('One of: "low", "medium", "high".'),
   summary: z.string().describe("One warm, plain-English sentence describing the space for the gardener."),
   observations: z.array(z.string()).describe("2-4 short, practical observations useful for planning."),
   concerns: z.array(z.string()).describe("0-3 potential problems worth checking, or empty."),
 });
+
+function pick<T extends string>(value: string, allowed: readonly T[], fallback: T): T {
+  const v = value.toLowerCase();
+  return allowed.find((a) => v === a) ?? allowed.find((a) => v.includes(a)) ?? fallback;
+}
 
 const SYSTEM = `You are the garden-space analyst for Plantr, an app that helps beginner gardeners in the United States plan a vegetable and herb garden.
 
@@ -60,8 +67,18 @@ export async function analyzePhoto(base64: string, mediaType: "image/jpeg" | "im
     if (response.stop_reason === "refusal" || !response.parsed_output) return null;
     const out = response.parsed_output;
     const clampFt = (n: number) => Math.min(60, Math.max(1, Math.round(n * 2) / 2));
+    const spaceType = /raised/i.test(out.spaceType)
+      ? "raised-bed"
+      : /contain|pot|patio|balcon|deck/i.test(out.spaceType)
+        ? "containers"
+        : /mix/i.test(out.spaceType)
+          ? "mixed"
+          : "in-ground";
     return {
       ...out,
+      spaceType,
+      sun: pick(out.sun, ["full", "partial", "shade"] as const, "partial"),
+      confidence: pick(out.confidence, ["low", "medium", "high"] as const, "low"),
       widthFt: clampFt(out.widthFt),
       lengthFt: clampFt(out.lengthFt),
       bedCount: Math.min(8, Math.max(0, Math.round(out.bedCount))),

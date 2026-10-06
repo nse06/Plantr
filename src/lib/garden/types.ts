@@ -73,10 +73,16 @@ export interface Climate {
   zone: string; // e.g. "7a"
   state: string | null;
   city: string | null;
-  lastFrost: string; // MM-DD, average last spring frost
-  firstFrost: string; // MM-DD, average first fall frost
+  lastFrost: string; // MM-DD, median last spring frost (32°F)
+  firstFrost: string; // MM-DD, median first fall frost (32°F)
   frostFree: boolean;
-  source: "usda-lookup" | "estimate" | "user";
+  /** "noaa": nearest NOAA station normals; "usda-lookup"/"estimate": zone-based averages. */
+  source: "noaa" | "usda-lookup" | "estimate" | "user";
+  /** Nearest NOAA weather station the dates and temperatures come from. */
+  station?: { name: string; distanceMi: number } | null;
+  /** NOAA 1991–2020 monthly normal low and high temperatures (°F), January..December. */
+  tmin?: number[] | null;
+  tmax?: number[] | null;
 }
 
 export interface BedArea {

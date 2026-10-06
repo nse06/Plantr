@@ -587,6 +587,11 @@ function LocationStep({ s, update }: StepProps) {
               <p className="font-display text-lg font-semibold">{c.frostFree ? "Year-round" : `${info.seasonDays} days`}</p>
             </div>
           </div>
+          <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-faint">
+            {c.source === "noaa" && c.station
+              ? `From NOAA climate normals for ${c.station.name}${c.station.distanceMi > 1 ? `, ${c.station.distanceMi} mi away` : ""}.`
+              : "Typical dates for your hardiness zone."}
+          </p>
           {!c.frostFree && (
             <div className="border-t border-line px-5 py-3">
               {editFrost ? (

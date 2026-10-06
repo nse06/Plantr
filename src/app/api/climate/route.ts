@@ -1,4 +1,5 @@
-import { getClimate, isValidZip, seasonLengthDays, STATE_NAMES } from "@/lib/garden/climate";
+import { isValidZip, seasonLengthDays, STATE_NAMES } from "@/lib/garden/climate";
+import { getClimate } from "@/lib/server/climate";
 import { seasonOptions } from "@/lib/garden/schedule";
 import { resolveToday } from "@/lib/server/planner";
 import { error, json } from "@/lib/server/http";

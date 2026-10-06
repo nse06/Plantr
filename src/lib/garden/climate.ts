@@ -1,11 +1,11 @@
 import type { Climate } from "./types";
 import { diffDays, mmddToISO } from "./dates";
 
-// ZIP code -> USDA hardiness zone -> average frost dates.
+// Climate helpers shared by the server and the browser (no large data here).
 //
-// Primary source: the public phzmapi.org dataset (USDA Plant Hardiness Zone Map by ZIP).
-// Fallback: a ZIP-prefix table with representative zones, so the app keeps working offline.
-// Frost dates are the typical averages for each zone; users can override them in the wizard.
+// Frost dates and temperatures normally come from the nearest NOAA weather station (see
+// src/lib/server/climate.ts). The zone-based averages below are the fallback when a ZIP has
+// no nearby station, and users can always override frost dates in the wizard.
 
 /** Average last spring frost / first fall frost for the middle of each zone. */
 const ZONE_FROST: Record<number, { last: string; first: string }> = {
@@ -157,6 +157,7 @@ export function lookupZip3(zip: string): { state: string; zone: string } | null 
   return row ? { state: row[2], zone: row[3] } : null;
 }
 
+/** Zone-based climate (fallback when no NOAA station data is available). */
 export function buildClimate(zip: string, zone: string, state: string | null, source: Climate["source"]): Climate {
   const frost = frostDatesForZone(zone);
   return {
@@ -168,45 +169,50 @@ export function buildClimate(zip: string, zone: string, state: string | null, so
     firstFrost: frost.firstFrost,
     frostFree: frost.frostFree,
     source,
+    station: null,
+    tmin: null,
+    tmax: null,
   };
 }
 
-const cache = new Map<string, Climate>();
-
 /**
- * Resolve the growing climate for a U.S. ZIP code. Returns null for ZIPs that aren't
- * in the U.S. (or aren't valid). Never throws: if the lookup service is slow or down
- * we fall back to the regional estimate.
+ * Climate from a NOAA station's normals. Median frost dates that wrap past New Year
+ * (e.g. Phoenix: last frost Jan 5, first frost Jan 3) mean frost is rare and brief.
  */
-export async function getClimate(zip: string): Promise<Climate | null> {
-  if (!isValidZip(zip)) return null;
-  const hit = cache.get(zip);
-  if (hit) return hit;
+export function climateFromStation(
+  zip: string,
+  zone: string,
+  state: string | null,
+  station: { name: string; distanceMi: number; lastFrost: string; firstFrost: string; tmin: number[]; tmax: number[] },
+): Climate {
+  const hasFrost = Boolean(station.lastFrost && station.firstFrost);
+  const wraps = hasFrost && station.firstFrost <= station.lastFrost;
+  return {
+    zip,
+    zone,
+    state,
+    city: null,
+    lastFrost: !hasFrost ? "01-20" : station.lastFrost,
+    firstFrost: !hasFrost || wraps ? "12-31" : station.firstFrost,
+    frostFree: !hasFrost,
+    source: "noaa",
+    station: { name: station.name, distanceMi: station.distanceMi },
+    tmin: station.tmin,
+    tmax: station.tmax,
+  };
+}
 
-  const regional = lookupZip3(zip);
-  let zone: string | null = null;
-  try {
-    const res = await fetch(`https://phzmapi.org/${zip}.json`, {
-      signal: AbortSignal.timeout(3500),
-      cache: "force-cache",
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { zone?: string };
-      if (data.zone && parseZone(data.zone)) zone = data.zone;
-    }
-  } catch {
-    // Network problem: fall through to the estimate.
+/** Where the dates came from, in plain English. */
+export function climateSourceNote(c: Climate): string {
+  if (c.source === "user") return "Using the frost dates you entered.";
+  if (c.source === "noaa" && c.station) {
+    const near = c.station.distanceMi <= 1 ? "nearby" : `${c.station.distanceMi} mi away`;
+    return `Frost dates and temperatures from NOAA 1991–2020 climate normals for ${c.station.name} (${near}). Half of years see frost after the last-frost date, so keep an eye on the forecast.`;
   }
-
-  let climate: Climate | null = null;
-  if (zone) climate = buildClimate(zip, zone, regional?.state ?? null, "usda-lookup");
-  else if (regional) climate = buildClimate(zip, regional.zone, regional.state, "estimate");
-
-  if (climate) {
-    if (cache.size > 5000) cache.clear();
-    cache.set(zip, climate);
+  if (c.source === "usda-lookup") {
+    return "Typical frost dates for your USDA hardiness zone. Local conditions can vary by a week or two.";
   }
-  return climate;
+  return "Estimated from your ZIP code region. Check with your local extension office for exact dates.";
 }
 
 export const STATE_NAMES: Record<string, string> = {

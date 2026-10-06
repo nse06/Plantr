@@ -18,7 +18,7 @@ import {
 import type { Area, BedArea, GardenPlan, PlanInput, PlannedPlant, PlanTask } from "@/lib/garden/types";
 import { getPlant, PLANTS_BY_ID } from "@/lib/garden/plants";
 import { fmtLong, fmtMMDD, fmtMonth, fmtShort, monthKey } from "@/lib/garden/dates";
-import { seasonLengthDays } from "@/lib/garden/climate";
+import { climateSourceNote, seasonLengthDays } from "@/lib/garden/climate";
 import { BedGrid, ContainerGrid, PlantBadge, SeasonTimeline, plantColor } from "@/components/garden/visuals";
 import { TaskItem } from "@/components/garden/tasks";
 import { Card, Chip, Stat, cx } from "@/components/ui";
@@ -135,13 +135,7 @@ export function OverviewTab({
               <dd className="font-semibold">{{ full: "Full sun", partial: "Partial sun", shade: "Mostly shade" }[input.sun]}</dd>
             </div>
           </dl>
-          <p className="border-t border-line px-5 py-3 text-xs text-faint">
-            {c.source === "user"
-              ? "Using the frost dates you entered."
-              : c.source === "usda-lookup"
-                ? "Zone from the USDA hardiness map; frost dates are typical averages for your zone. Local conditions vary by a week or two."
-                : "Estimated from your ZIP code region. Check with your local extension office for exact dates."}
-          </p>
+          <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-faint">{climateSourceNote(c)}</p>
         </Card>
 
         {plan.skipped.length > 0 && (
