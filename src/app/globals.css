@@ -1,26 +1,129 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-cream: #fbf8f1;
+  --color-paper: #ffffff;
+  --color-ink: #1e2a1f;
+  --color-muted: #5d6a5c;
+  --color-faint: #8a958a;
+  --color-line: #e7e1d3;
+  --color-line-strong: #d6cfbd;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-leaf-50: #f1f7ee;
+  --color-leaf-100: #dfeed8;
+  --color-leaf-200: #bfdcb2;
+  --color-leaf-300: #93c383;
+  --color-leaf-400: #67a75a;
+  --color-leaf-500: #468a3d;
+  --color-leaf-600: #2f6b3b;
+  --color-leaf-700: #285a32;
+  --color-leaf-800: #1f4727;
+  --color-leaf-900: #16341d;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --color-sun-50: #fff8e8;
+  --color-sun-100: #fdeec8;
+  --color-sun-300: #f7cf72;
+  --color-sun-400: #f2b33d;
+  --color-sun-600: #b7791f;
+
+  --color-clay-50: #fbefe9;
+  --color-clay-100: #f6dccf;
+  --color-clay-400: #d9845e;
+  --color-clay-500: #c8643b;
+  --color-clay-700: #8f4325;
+
+  --color-sky-50: #eef5fb;
+  --color-sky-500: #3b7fb8;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(30 42 31 / 0.04), 0 4px 16px rgb(30 42 31 / 0.05);
+  --shadow-lift: 0 2px 4px rgb(30 42 31 / 0.06), 0 12px 32px rgb(30 42 31 / 0.1);
+
+  --animate-rise: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-sway: sway 3s ease-in-out infinite;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes sway {
+    0%,
+    100% {
+      transform: rotate(-4deg);
+    }
+    50% {
+      transform: rotate(4deg);
+    }
   }
 }
 
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tap targets and focus: accessible by default. */
+:where(button, a, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid var(--color-sun-400);
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+
+.font-display {
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.pb-safe {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@media print {
+  header,
+  footer,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
