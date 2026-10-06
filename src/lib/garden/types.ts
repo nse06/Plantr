@@ -76,7 +76,7 @@ export interface Climate {
   lastFrost: string; // MM-DD, average last spring frost
   firstFrost: string; // MM-DD, average first fall frost
   frostFree: boolean;
-  source: "usda-lookup" | "estimate";
+  source: "usda-lookup" | "estimate" | "user";
 }
 
 export interface BedArea {
@@ -104,6 +104,8 @@ export interface PlanInput {
   climate: Climate;
   spaceType: SpaceType;
   areas: Area[];
+  /** Beds/containers already exist and hold soil (false = we include building/filling them). */
+  bedsReady: boolean;
   sun: SunExposure;
   goals: Goal[];
   wants: string[]; // plant ids explicitly requested
