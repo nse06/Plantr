@@ -119,11 +119,14 @@ export interface PlanInput {
 }
 
 export interface PhotoAnalysis {
+  isGardenSpace: boolean;
   spaceType: SpaceType;
   widthFt: number;
   lengthFt: number;
   bedCount: number;
+  containerCount: number;
   sun: SunExposure;
+  sunReason: string;
   confidence: "low" | "medium" | "high";
   summary: string;
   observations: string[];

@@ -453,3 +453,39 @@ export function normalizeDesign(design: Design, input: PlanInput, evaluation: Ca
 
   return { ...design, selections: [...merged.values()], skipped };
 }
+
+/**
+ * Trim a design that asks for more room than the space has: shrink the biggest non-requested
+ * crops first, and drop a crop entirely only when it's already at its minimum.
+ */
+export function fitDesignToSpace(design: Design, input: PlanInput): Design {
+  const capacity = capacityUnits(input);
+  const wanted = new Set([...input.wants, ...plantsFromNotes(input.notes).named]);
+  const selections = design.selections.map((s) => ({ ...s }));
+  const skipped = [...design.skipped];
+  const units = () =>
+    selections.reduce((n, s) => n + spaceUnits(PLANTS_BY_ID[s.plantId], s.quantity, input), 0);
+
+  let guard = 500;
+  while (units() > capacity && selections.length && guard-- > 0) {
+    // Shrink the most space-hungry unrequested crop; requested crops shrink last.
+    const order = [...selections].sort((a, b) => {
+      const wa = wanted.has(a.plantId) ? 1 : 0;
+      const wb = wanted.has(b.plantId) ? 1 : 0;
+      if (wa !== wb) return wa - wb;
+      return (
+        spaceUnits(PLANTS_BY_ID[b.plantId], b.quantity, input) - spaceUnits(PLANTS_BY_ID[a.plantId], a.quantity, input)
+      );
+    });
+    const target = order[0];
+    const p = PLANTS_BY_ID[target.plantId];
+    const step = p.perSqFt >= 1 && target.quantity > p.perSqFt ? p.perSqFt : 1;
+    if (target.quantity - step >= minimumQuantity(p)) {
+      target.quantity -= step;
+    } else {
+      selections.splice(selections.indexOf(target), 1);
+      skipped.push({ name: p.name, reason: "There wasn't room for it alongside everything else." });
+    }
+  }
+  return { ...design, selections, skipped };
+}

@@ -1,7 +1,7 @@
 import type { Design, GardenPlan, PlanInput, PlannedPlant } from "./types";
 import { getPlant, spacingLabel } from "./plants";
 import { seasonContext, type SeasonContext } from "./schedule";
-import { evaluateCatalog, normalizeDesign, type CatalogEvaluation, type Candidate } from "./recommend";
+import { evaluateCatalog, fitDesignToSpace, normalizeDesign, type CatalogEvaluation, type Candidate } from "./recommend";
 import { layoutGarden, plantableSqFt, potCount } from "./layout";
 import { buildTasks } from "./tasks";
 import { buildShopping } from "./shopping";
@@ -28,7 +28,7 @@ function acquireFor(c: Candidate, input: PlanInput): "seeds" | "starts" {
  */
 export function buildPlan(input: PlanInput, rawDesign: Design, today: string): GardenPlan {
   const { ctx, evaluation } = planContext(input, today);
-  const design = normalizeDesign(rawDesign, input, evaluation);
+  const design = fitDesignToSpace(normalizeDesign(rawDesign, input, evaluation), input);
   const candidates = new Map(evaluation.feasible.map((c) => [c.plant.id, c]));
 
   const { layouts, placed } = layoutGarden(
