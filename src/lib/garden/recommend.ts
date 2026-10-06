@@ -243,8 +243,12 @@ function maxQuantity(p: Plant, household: number): number {
   if (p.perennial && p.id !== "strawberry") return Math.max(def, 2);
   if (p.category === "herb") return Math.max(def, p.perSqFt >= 1 ? p.perSqFt * 2 : 2);
   if (p.id === "zucchini") return Math.max(def, Math.ceil(household / 2) + 1);
-  if (p.perSqFt < 1) return Math.max(def, Math.ceil(def * 2));
-  return Math.max(def * 3, def + p.perSqFt);
+  // Big plants (tomatoes, squash, melons) are very productive: a little extra goes a long way.
+  if (p.perSqFt < 1) return Math.max(def, Math.ceil(def * 1.5));
+  // One-per-square plants (peppers, kale, broccoli, strawberries): a couple more at most.
+  if (p.perSqFt <= 2) return def + 2;
+  // Dense square-foot crops (greens, roots, beans): up to double.
+  return Math.max(def * 2, def + p.perSqFt);
 }
 
 /**
@@ -336,24 +340,8 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
     }
   }
 
-  // 5. Grow the crops people eat most until the space is comfortably full (~90%).
-  const goal = Math.floor(capacity * 0.9);
-  let grew = true;
-  while (used < goal && grew) {
-    grew = false;
-    for (const sel of selections) {
-      const p = PLANTS_BY_ID[sel.plantId];
-      if (p.category === "flower" || used >= goal) continue;
-      const step = p.perSqFt >= 1 ? p.perSqFt : 1;
-      const next = sel.quantity + step;
-      if (next > maxQuantity(p, input.household)) continue;
-      const delta = spaceUnits(p, next, input) - spaceUnits(p, sel.quantity, input);
-      if (used + delta > capacity) continue;
-      sel.quantity = next;
-      used += delta;
-      grew = true;
-    }
-  }
+  // 5. Grow quantities until the space is comfortably full.
+  growToFill(selections, input, used);
 
   for (const { plant, reason } of evaluation.infeasible) {
     if (wanted.has(plant.id)) skipped.push({ name: plant.name, reason });
@@ -488,4 +476,39 @@ export function fitDesignToSpace(design: Design, input: PlanInput): Design {
     }
   }
   return { ...design, selections, skipped };
+}
+
+/**
+ * Grow quantities until the space is comfortably full (~90%). Square-foot crops (greens,
+ * beans, roots) grow first, a square at a time; big plants only get a modest bump, and only
+ * when the garden would otherwise look half empty. Mutates the selections.
+ */
+export function growToFill(selections: PlantSelection[], input: PlanInput, alreadyUsed?: number): void {
+  const capacity = capacityUnits(input);
+  let used =
+    alreadyUsed ?? selections.reduce((n, s) => n + spaceUnits(PLANTS_BY_ID[s.plantId], s.quantity, input), 0);
+  for (const bigPlants of [false, true]) {
+    const goal = Math.floor(capacity * (bigPlants ? 0.7 : 0.9));
+    let grew = true;
+    while (used < goal && grew) {
+      grew = false;
+      for (const sel of selections) {
+        const p = PLANTS_BY_ID[sel.plantId];
+        if (!p || p.category === "flower" || used >= goal || p.perSqFt < 1 !== bigPlants) continue;
+        const step = p.perSqFt >= 1 ? p.perSqFt : 1;
+        const next = sel.quantity + step;
+        if (next > maxQuantity(p, input.household)) continue;
+        const delta = spaceUnits(p, next, input) - spaceUnits(p, sel.quantity, input);
+        if (used + delta > capacity) continue;
+        sel.quantity = next;
+        used += delta;
+        grew = true;
+      }
+    }
+  }
+}
+
+/** Space units a design asks for. */
+export function designUnits(design: Design, input: PlanInput): number {
+  return design.selections.reduce((n, s) => n + spaceUnits(PLANTS_BY_ID[s.plantId], s.quantity, input), 0);
 }

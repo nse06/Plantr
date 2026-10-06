@@ -42,6 +42,12 @@ export function GardenHome({ garden, input, plan, doneTaskIds, journal: initialJ
 
   const week = useMemo(() => weekTasks(plan, tasks.done, today), [plan, tasks.done, today]);
   const later = useMemo(() => upcomingTasks(plan, today).slice(0, 6), [plan, today]);
+  // Planning ahead (e.g. a spring plan made in fall): show what's next, however far off.
+  const nextUp = useMemo(
+    () => (week.length || later.length ? [] : plan.tasks.filter((t) => t.date >= today && !tasks.done.has(t.id)).slice(0, 3)),
+    [week.length, later.length, plan.tasks, today, tasks.done],
+  );
+  const daysToStart = nextUp.length ? Math.round((Date.parse(nextUp[0].date) - Date.parse(today)) / 86_400_000) : 0;
   const prog = progress(plan, tasks.done, today);
   const pct = prog.total ? Math.round((prog.done / prog.total) * 100) : 0;
   const over = seasonOver(plan, today);
@@ -161,6 +167,21 @@ export function GardenHome({ garden, input, plan, doneTaskIds, journal: initialJ
             )}
             {tasks.error && <p className="mt-2 text-sm text-clay-700">{tasks.error}</p>}
           </section>
+
+          {nextUp.length > 0 && (
+            <section>
+              <h2 className="mb-1 font-display text-xl font-semibold text-muted">Next up</h2>
+              <p className="mb-3 text-sm text-muted">
+                Your garden season kicks off in {daysToStart >= 14 ? `about ${Math.round(daysToStart / 7)} weeks` : `${daysToStart} days`}. We&apos;ll
+                email you when it&apos;s time.
+              </p>
+              <ul className="space-y-2">
+                {nextUp.map((t) => (
+                  <TaskItem key={t.id} task={t} done={tasks.done.has(t.id)} onToggle={() => tasks.toggle(t.id)} />
+                ))}
+              </ul>
+            </section>
+          )}
 
           {later.length > 0 && (
             <section>
@@ -330,11 +351,11 @@ function HarvestLog({ gardenId, plan, initial, today }: { gardenId: string; plan
         </div>
         <form onSubmit={add} className="space-y-3">
           {mode === "harvest" ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-2 max-sm:grid-cols-2">
               <select
                 value={plantId}
                 onChange={(e) => setPlantId(e.target.value)}
-                className="h-11 min-w-40 flex-1 rounded-xl border border-line-strong bg-paper px-3"
+                className="h-11 min-w-0 rounded-xl border border-line-strong bg-paper px-3 max-sm:col-span-2"
                 aria-label="Plant"
               >
                 {plan.plants.map((p) => (
@@ -348,7 +369,7 @@ function HarvestLog({ gardenId, plan, initial, today }: { gardenId: string; plan
                 value={amount}
                 onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, "").slice(0, 7))}
                 placeholder="Amount"
-                className="h-11 w-24 rounded-xl border border-line-strong bg-paper px-3"
+                className="h-11 w-full min-w-0 rounded-xl border border-line-strong bg-paper px-3 sm:w-28"
                 aria-label="Amount"
               />
               <select

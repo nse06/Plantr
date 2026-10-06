@@ -92,15 +92,22 @@ export function buildShopping(
       note: `Fills ${Math.round(cuft)} cu ft at 12 inches deep.${bags > 25 ? " Bulk delivery is much cheaper at this size." : ""}`,
       estCost: money(bags > 25 ? Math.max(1, yards) * 60 + 50 : bags * 10),
     });
+    // One line per bed size ("Raised bed frame, 4×8 ft × 3").
+    const sizes = new Map<string, { w: number; l: number; count: number }>();
     for (const b of raisedBeds) {
-      const perimeter = 2 * (b.widthFt + b.lengthFt);
+      const [w, l] = [Math.min(b.widthFt, b.lengthFt), Math.max(b.widthFt, b.lengthFt)];
+      const key = `${w}x${l}`;
+      const prev = sizes.get(key);
+      sizes.set(key, { w, l, count: (prev?.count ?? 0) + 1 });
+    }
+    for (const [key, { w, l, count }] of sizes) {
       items.push({
-        id: `build:${b.id}`,
+        id: `build:${key}`,
         group: "Supplies",
-        name: `Raised bed frame, ${b.widthFt}×${b.lengthFt} ft`,
-        quantity: "1",
+        name: `Raised bed frame, ${w}×${l} ft`,
+        quantity: `${count}`,
         note: "A kit, or untreated cedar boards with corner brackets.",
-        estCost: money(perimeter * 5),
+        estCost: money(2 * (w + l) * 5 * count),
       });
     }
   }

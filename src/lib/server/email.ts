@@ -44,12 +44,17 @@ export async function sendEmail(email: Email): Promise<boolean> {
   }
 }
 
-export function appUrl(): string {
-  const url =
+/**
+ * Public base URL for links in emails. Production uses configuration only: deriving it from
+ * the request's Host header would let an attacker get sign-in links pointing at their site.
+ */
+export function appUrl(req?: Request): string {
+  const configured =
     process.env.APP_URL ||
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "") ||
-    "http://localhost:3000";
-  return url.replace(/\/$/, "");
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : "");
+  if (configured) return configured.replace(/\/$/, "");
+  if (req && process.env.NODE_ENV !== "production") return new URL(req.url).origin;
+  return "http://localhost:3000";
 }
 
 export function escapeHtml(s: string): string {

@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
   const next = safeNext(parsed.data.next);
   const token = await createLoginToken(email, next);
-  const link = `${appUrl()}/auth/verify?token=${encodeURIComponent(token)}`;
+  const link = `${appUrl(req)}/auth/verify?token=${encodeURIComponent(token)}`;
   const sent = await sendEmail({
     to: email,
     subject: "Your Plantr sign-in link",

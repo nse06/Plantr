@@ -1,7 +1,16 @@
 import type { Design, GardenPlan, PlanInput, PlannedPlant } from "./types";
 import { getPlant, spacingLabel } from "./plants";
 import { seasonContext, type SeasonContext } from "./schedule";
-import { evaluateCatalog, fitDesignToSpace, normalizeDesign, type CatalogEvaluation, type Candidate } from "./recommend";
+import {
+  capacityUnits,
+  designUnits,
+  evaluateCatalog,
+  fitDesignToSpace,
+  growToFill,
+  normalizeDesign,
+  type CatalogEvaluation,
+  type Candidate,
+} from "./recommend";
 import { layoutGarden, plantableSqFt, potCount } from "./layout";
 import { buildTasks } from "./tasks";
 import { buildShopping } from "./shopping";
@@ -29,6 +38,10 @@ function acquireFor(c: Candidate, input: PlanInput): "seeds" | "starts" {
 export function buildPlan(input: PlanInput, rawDesign: Design, today: string): GardenPlan {
   const { ctx, evaluation } = planContext(input, today);
   const design = fitDesignToSpace(normalizeDesign(rawDesign, input, evaluation), input);
+  // An AI design that leaves most of the space empty gets topped up with more of what it chose.
+  if (design.source === "ai" && designUnits(design, input) < capacityUnits(input) * 0.5) {
+    growToFill(design.selections, input);
+  }
   const candidates = new Map(evaluation.feasible.map((c) => [c.plant.id, c]));
 
   const { layouts, placed } = layoutGarden(

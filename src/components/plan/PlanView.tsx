@@ -52,11 +52,16 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
   useEffect(() => {
     // Sync to the visitor's own calendar day and any #tab in the URL after hydration.
     const local = todayISO();
-    const hash = window.location.hash.slice(1);
+    const fromHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (TABS.some((t) => t.id === hash)) setTab(hash as TabId);
+    };
     queueMicrotask(() => {
       if (local !== serverToday) setToday(local);
-      if (TABS.some((t) => t.id === hash)) setTab(hash as TabId);
+      fromHash();
     });
+    window.addEventListener("hashchange", fromHash);
+    return () => window.removeEventListener("hashchange", fromHash);
   }, [serverToday]);
 
   const save = useCallback(async () => {

@@ -1,4 +1,4 @@
-import type { Area, GardenPlan, PlanInput } from "@/lib/garden/types";
+import type { Area, GardenPlan, Goal, PlanInput } from "@/lib/garden/types";
 import { getClimate } from "@/lib/server/climate";
 import { addDays, todayISO } from "@/lib/garden/dates";
 import { buildPlan, planContext } from "@/lib/garden/plan";
@@ -80,6 +80,20 @@ export async function generatePlan(req: PlanRequest): Promise<GenerateResult> {
   return { ok: true, input, plan };
 }
 
+const GARDEN_NAMES: Record<Goal, string> = {
+  salad: "Salad garden",
+  salsa: "Salsa garden",
+  herbs: "Herb garden",
+  pizza: "Pizza garden",
+  pollinators: "Pollinator garden",
+  kids: "Kids' garden",
+  "cooking-greens": "Greens garden",
+  preserving: "Pantry garden",
+  "low-maintenance": "Easy-care garden",
+};
+
 export function defaultGardenName(input: PlanInput): string {
-  return input.season === "fall" ? `Fall ${input.year} garden` : `${input.year} garden`;
+  const name = input.goals[0] ? GARDEN_NAMES[input.goals[0]] : null;
+  if (!name) return input.season === "fall" ? `My fall ${input.year} garden` : `My ${input.year} garden`;
+  return input.season === "fall" ? `Fall ${name.toLowerCase()} ${input.year}` : `${name} ${input.year}`;
 }

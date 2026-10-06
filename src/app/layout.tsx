@@ -3,6 +3,7 @@ import { Fraunces, Inter } from "next/font/google";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/server/auth";
 import { Logo, buttonClass } from "@/components/ui";
+import { HideOn } from "@/components/HideOn";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
@@ -60,31 +61,33 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <main id="main" className="flex-1">
           {children}
         </main>
-        <footer className="border-t border-line bg-paper/60 no-print">
-          <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <Logo className="text-lg" />
-              <p className="mt-1">Garden plans for U.S. gardeners, tuned to your ZIP code&apos;s frost dates.</p>
-            </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              <Link href="/plan/new" className="hover:text-ink">
-                Plan a garden
-              </Link>
-              {user ? (
-                <Link href="/account" className="hover:text-ink">
-                  Account
+        <HideOn paths={["/plan/new"]}>
+          <footer className="border-t border-line bg-paper/60 no-print">
+            <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <Logo className="text-lg" />
+                <p className="mt-1">Garden plans for U.S. gardeners, tuned to your ZIP code&apos;s frost dates.</p>
+              </div>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                <Link href="/plan/new" className="hover:text-ink">
+                  Plan a garden
                 </Link>
-              ) : (
-                <Link href="/login" className="hover:text-ink">
-                  Sign in
+                {user ? (
+                  <Link href="/account" className="hover:text-ink">
+                    Account
+                  </Link>
+                ) : (
+                  <Link href="/login" className="hover:text-ink">
+                    Sign in
+                  </Link>
+                )}
+                <Link href="/privacy" className="hover:text-ink">
+                  Privacy
                 </Link>
-              )}
-              <Link href="/privacy" className="hover:text-ink">
-                Privacy
-              </Link>
+              </div>
             </div>
-          </div>
-        </footer>
+          </footer>
+        </HideOn>
       </body>
     </html>
   );
