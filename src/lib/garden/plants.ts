@@ -54,6 +54,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 4,
     startCost: 5,
+    petCaution: "Tomato leaves and stems are toxic to cats and dogs.",
   }),
   plant({
     id: "cherry-tomato",
@@ -89,6 +90,8 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 4,
     startCost: 5,
+    indoor: { light: 3, growLightOnly: true, pot: { gal: 2.5, plants: 1 }, maxPerPot: 1, start: "seeds", dtm: 85, difficulty: 3, varieties: ["Tiny Tim", "Micro Tom", "Red Robin"], tip: "No bees indoors: tap each flower with a small paintbrush, or shake the flowering stems, every couple of days." },
+    petCaution: "Tomato leaves and stems are toxic to cats and dogs.",
   }),
   plant({
     id: "paste-tomato",
@@ -124,6 +127,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 4,
     startCost: 5,
+    petCaution: "Tomato leaves and stems are toxic to cats and dogs.",
   }),
   plant({
     id: "bell-pepper",
@@ -191,6 +195,8 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 4,
     startCost: 5,
+    indoor: { light: 3, growLightOnly: true, pot: { gal: 1.5, plants: 1 }, maxPerPot: 1, start: "seeds", dtm: 100, difficulty: 2, varieties: ["Basket of Fire", "Thai Hot", "Prairie Fire"], tip: "Hand-pollinate the flowers with a small brush, and let the mix dry slightly between waterings." },
+    petCaution: "The leaves can upset pets' stomachs, and the peppers burn.",
   }),
   plant({
     id: "eggplant",
@@ -584,6 +590,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3.5,
     startCost: 4,
+    indoor: { light: 2, pot: { gal: 0.6, plants: 1 }, maxPerPot: 3, start: "seeds", dtm: 30, harvestWeeks: 6, resow: 3, varieties: ["Tom Thumb", "Black Seeded Simpson", "Salad Bowl"], tip: "Pick the outer leaves when they're 3–4 inches long. The center keeps producing." },
   }),
   plant({
     id: "spinach",
@@ -617,6 +624,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3.5,
     startCost: 4,
+    indoor: { light: 2, pot: { gal: 0.6, plants: 3 }, maxPerPot: 9, start: "seeds", dtm: 35, harvestWeeks: 5, resow: 4, tip: "Keep it cool (60–70°F) and pick the leaves young." },
   }),
   plant({
     id: "kale",
@@ -652,6 +660,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3.5,
     startCost: 4.5,
+    indoor: { light: 2, pot: { gal: 1.5, plants: 1 }, maxPerPot: 2, start: "seeds", dtm: 40, tip: "Pick baby leaves from the outside. A cool, bright spot keeps them tender." },
   }),
   plant({
     id: "swiss-chard",
@@ -717,6 +726,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3.5,
     startCost: 4,
+    indoor: { light: 2, pot: { gal: 0.6, plants: 4 }, maxPerPot: 12, start: "seeds", dtm: 25, harvestWeeks: 4, resow: 3, tip: "Cut baby leaves an inch above the soil and they regrow once or twice." },
   }),
   plant({
     id: "radish",
@@ -988,6 +998,8 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 1, pot: { gal: 0.25, plants: 4 }, maxPerPot: 12, start: "scraps", dtm: 14, tip: "Plant the white root ends from a grocery-store bunch. Snip the greens and they regrow two or three times." },
+    petCaution: "Toxic to cats and dogs, like all onions.",
   }),
   plant({
     id: "garlic",
@@ -1022,6 +1034,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 3,
+    petCaution: "Toxic to cats and dogs.",
   }),
   plant({
     id: "potato",
@@ -1091,6 +1104,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3.5,
     startCost: 4,
+    indoor: { light: 3, pot: { gal: 0.6, plants: 1 }, maxPerPot: 3, start: "starts", dtm: 14, difficulty: 2, varieties: ["Spicy Globe", "Genovese", "Pistou"], tip: "Pinch off the top pair of leaves every week or two so it bushes out, and snip flower buds as soon as they show." },
   }),
   plant({
     id: "parsley",
@@ -1125,6 +1139,8 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 1, pot: { gal: 0.6, plants: 1 }, maxPerPot: 2, start: "starts", dtm: 21, tip: "Cut the outer stems at the base and let the center keep growing." },
+    petCaution: "Large amounts can make pets sensitive to sunlight.",
   }),
   plant({
     id: "cilantro",
@@ -1158,6 +1174,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 2, pot: { gal: 1.5, plants: 3 }, maxPerPot: 6, start: "seeds", dtm: 40, harvestWeeks: 6, resow: 4, difficulty: 2, tip: "It goes to seed quickly indoors too. Sow a fresh pot every few weeks for a steady supply." },
   }),
   plant({
     id: "dill",
@@ -1227,6 +1244,8 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 2, pot: { gal: 0.6, plants: 1 }, maxPerPot: 2, start: "starts", dtm: 21, tip: "Snip a third of the clump an inch above the soil. It regrows in a couple of weeks." },
+    petCaution: "Toxic to cats and dogs, like onions and garlic.",
   }),
   plant({
     id: "mint",
@@ -1260,6 +1279,8 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 1, pot: { gal: 0.6, plants: 1 }, maxPerPot: 1, start: "starts", dtm: 14, tip: "Give it a pot of its own. It spreads and crowds out anything it shares with." },
+    petCaution: "Can upset a cat's or dog's stomach.",
   }),
   plant({
     id: "oregano",
@@ -1293,6 +1314,8 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 3, pot: { gal: 0.6, plants: 1 }, maxPerPot: 2, start: "starts", dtm: 21, tip: "Let the mix dry out between waterings. It hates wet feet." },
+    petCaution: "Can upset a cat's or dog's stomach.",
   }),
   plant({
     id: "thyme",
@@ -1325,6 +1348,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 3, pot: { gal: 0.6, plants: 1 }, maxPerPot: 2, start: "starts", dtm: 21, difficulty: 2, tip: "Give it your brightest spot and water sparingly." },
   }),
   plant({
     id: "rosemary",
@@ -1357,6 +1381,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 5,
+    indoor: { light: 3, pot: { gal: 1.5, plants: 1 }, maxPerPot: 1, start: "starts", dtm: 28, difficulty: 3, tip: "The trickiest indoor herb: brightest window, a cool room, and water only when the top inch is dry." },
   }),
   plant({
     id: "sage",
@@ -1390,6 +1415,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 3,
     startCost: 4,
+    indoor: { light: 3, pot: { gal: 1.5, plants: 1 }, maxPerPot: 1, start: "starts", dtm: 21, difficulty: 2, tip: "Let it dry out between waterings, and snip leaves often to keep it compact." },
   }),
 
   // ---------- Flowers ----------
@@ -1555,6 +1581,39 @@ export const PLANTS: Plant[] = [
 
   // ---------- Fruit ----------
   plant({
+    id: "microgreens",
+    name: "Microgreens",
+    emoji: "🌱",
+    category: "vegetable",
+    season: "cool",
+    frost: "half-hardy",
+    sun: "partial",
+    perSqFt: 16,
+    heightIn: 3,
+    pot: null,
+    dtm: 10,
+    harvestWeeks: 1,
+    method: "direct",
+    plantOutWeeks: 0,
+    succession: 2,
+    difficulty: 1,
+    water: "medium",
+    feeder: "light",
+    goals: ["salad", "kids", "cooking-greens"],
+    perPerson: 1,
+    yield: "About 2 cups of tender greens per tray",
+    varieties: ["Radish", "Broccoli", "Pea shoots", "Sunflower"],
+    tips: [
+      "Scatter seeds thickly over damp mix, press them in, and keep them covered and dark for 2–3 days until they sprout.",
+      "Water from below (set the tray in a dish of water) so the seeds stay put.",
+      "Snip with scissors just above the soil when the first leaves open, usually 7–14 days after sowing.",
+    ],
+    seedCost: 8,
+    startCost: 8,
+    indoorOnly: true,
+    indoor: { light: 1, pot: { gal: 0.25, plants: 1 }, maxPerPot: 1, start: "seeds", dtm: 10, harvestWeeks: 1, resow: 2, varieties: ["Radish", "Broccoli", "Pea shoots"], tip: "Pale and leggy means they need more light. They're still tasty, just less pretty." },
+  }),
+  plant({
     id: "strawberry",
     name: "Strawberry",
     emoji: "🍓",
@@ -1587,6 +1646,7 @@ export const PLANTS: Plant[] = [
     ],
     seedCost: 4,
     startCost: 2,
+    indoor: { light: 3, growLightOnly: true, pot: { gal: 0.6, plants: 1 }, maxPerPot: 2, start: "starts", dtm: 60, difficulty: 3, varieties: ["Seascape", "Albion", "Tristar"], tip: "Day-neutral varieties fruit all year under a grow light. Pinch off runners so the plant puts its energy into berries." },
   }),
 ];
 
@@ -1647,6 +1707,7 @@ export const PLANT_COLORS: Record<string, string> = {
   sunflower: "#f2c318",
   calendula: "#f4b330",
   strawberry: "#e23c3c",
+  microgreens: "#7cc36a",
 };
 
 /** Short two-letter labels for layout tiles. */
@@ -1698,6 +1759,7 @@ export const PLANT_ABBR: Record<string, string> = {
   sunflower: "Su",
   calendula: "Cl",
   strawberry: "St",
+  microgreens: "Mg",
 };
 
 export const GOALS: { id: Goal; label: string; emoji: string; blurb: string }[] = [

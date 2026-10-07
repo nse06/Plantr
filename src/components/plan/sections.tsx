@@ -19,7 +19,8 @@ import type { Area, BedArea, GardenPlan, PlanInput, PlannedPlant, PlanTask } fro
 import { getPlant, PLANTS_BY_ID } from "@/lib/garden/plants";
 import { fmtLong, fmtMMDD, fmtMonth, fmtShort, monthKey } from "@/lib/garden/dates";
 import { climateSourceNote, seasonLengthDays } from "@/lib/garden/climate";
-import { BedGrid, ContainerGrid, PlantBadge, SeasonTimeline, plantColor } from "@/components/garden/visuals";
+import { BedGrid, ContainerGrid, PlantBadge, SeasonTimeline, WindowsillView, plantColor } from "@/components/garden/visuals";
+import { INDOOR_WEEKS, WINDOW_LABELS, isIndoor, potInchesForGallons } from "@/lib/garden/indoor";
 import { TaskItem } from "@/components/garden/tasks";
 import { Card, Chip, Stat, cx } from "@/components/ui";
 
@@ -46,6 +47,9 @@ export function OverviewTab({
 }) {
   const next = plan.tasks.filter((t) => t.date >= today && !tasks.done.has(t.id)).slice(0, 4);
   const c = input.climate;
+  const indoor = isIndoor(input);
+  const hasBeds = input.areas.some((a) => a.kind === "bed");
+  const potsUsed = plan.layouts.reduce((n, l) => (l.kind === "containers" ? n + l.pots.filter((p) => p.plantId).length : n), 0);
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
       <div className="space-y-5">
@@ -59,13 +63,21 @@ export function OverviewTab({
             <Stat label="Crops" value={plan.plants.length} hint={`${plan.stats.plantCount} plants total`} />
             <Stat
               label="Space used"
-              value={`${plan.stats.usedSqFt}`}
-              hint={`of ${plan.stats.growingSqFt} ${input.areas.some((a) => a.kind === "bed") ? "sq ft" : "pots"}`}
+              value={`${hasBeds ? plan.stats.usedSqFt + potsUsed : potsUsed}`}
+              hint={`of ${plan.stats.growingSqFt} ${hasBeds ? "sq ft" : "pots"}`}
             />
             <Stat label="Est. cost" value={money(plan.stats.estCost)} hint="seeds, plants & supplies" />
             {plan.stats.firstPlanting && <Stat label="First planting" value={fmtShort(plan.stats.firstPlanting)} />}
             {plan.stats.firstHarvest && <Stat label="First harvest" value={fmtShort(plan.stats.firstHarvest)} />}
-            <Stat label="Zone" value={c.zone} hint={c.frostFree ? "frost-free" : `${seasonLengthDays(c)} frost-free days`} />
+            {indoor ? (
+              <Stat
+                label="Light"
+                value={input.indoor && input.indoor.window !== "unsure" ? WINDOW_LABELS[input.indoor.window].replace("-facing", "") : "Window"}
+                hint={input.indoor?.growLight === "none" ? "window light" : "window + grow light"}
+              />
+            ) : (
+              <Stat label="Zone" value={c.zone} hint={c.frostFree ? "frost-free" : `${seasonLengthDays(c)} frost-free days`} />
+            )}
           </div>
         </Card>
 
@@ -103,40 +115,44 @@ export function OverviewTab({
       </div>
 
       <div className="space-y-5">
-        <Card className="overflow-hidden">
-          <div className="bg-gradient-to-br from-leaf-600 to-leaf-800 p-5 text-white">
-            <p className="text-xs font-bold uppercase tracking-widest text-leaf-100">Your climate</p>
-            <p className="mt-1 font-display text-3xl font-semibold">Zone {c.zone}</p>
-            <p className="text-sm text-leaf-100">
-              ZIP {input.zip}
-              {c.state ? ` · ${c.state}` : ""}
-            </p>
-          </div>
-          <dl className="divide-y divide-line text-sm">
-            {c.frostFree ? (
-              <div className="flex justify-between px-5 py-3">
-                <dt className="text-muted">Frost</dt>
-                <dd className="font-semibold">Rare to none</dd>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between px-5 py-3">
-                  <dt className="text-muted">Last spring frost</dt>
-                  <dd className="font-semibold">~{fmtMMDD(c.lastFrost)}</dd>
-                </div>
-                <div className="flex justify-between px-5 py-3">
-                  <dt className="text-muted">First fall frost</dt>
-                  <dd className="font-semibold">~{fmtMMDD(c.firstFrost)}</dd>
-                </div>
-              </>
-            )}
-            <div className="flex justify-between px-5 py-3">
-              <dt className="text-muted">Sun</dt>
-              <dd className="font-semibold">{{ full: "Full sun", partial: "Partial sun", shade: "Mostly shade" }[input.sun]}</dd>
+        {indoor ? (
+          <IndoorSetupCard input={input} />
+        ) : (
+          <Card className="overflow-hidden">
+            <div className="bg-gradient-to-br from-leaf-600 to-leaf-800 p-5 text-white">
+              <p className="text-xs font-bold uppercase tracking-widest text-leaf-100">Your climate</p>
+              <p className="mt-1 font-display text-3xl font-semibold">Zone {c.zone}</p>
+              <p className="text-sm text-leaf-100">
+                ZIP {input.zip}
+                {c.state ? ` · ${c.state}` : ""}
+              </p>
             </div>
-          </dl>
-          <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-faint">{climateSourceNote(c)}</p>
-        </Card>
+            <dl className="divide-y divide-line text-sm">
+              {c.frostFree ? (
+                <div className="flex justify-between px-5 py-3">
+                  <dt className="text-muted">Frost</dt>
+                  <dd className="font-semibold">Rare to none</dd>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between px-5 py-3">
+                    <dt className="text-muted">Last spring frost</dt>
+                    <dd className="font-semibold">~{fmtMMDD(c.lastFrost)}</dd>
+                  </div>
+                  <div className="flex justify-between px-5 py-3">
+                    <dt className="text-muted">First fall frost</dt>
+                    <dd className="font-semibold">~{fmtMMDD(c.firstFrost)}</dd>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between px-5 py-3">
+                <dt className="text-muted">Sun</dt>
+                <dd className="font-semibold">{{ full: "Full sun", partial: "Partial sun", shade: "Mostly shade" }[input.sun]}</dd>
+              </div>
+            </dl>
+            <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-faint">{climateSourceNote(c)}</p>
+          </Card>
+        )}
 
         {plan.skipped.length > 0 && (
           <Card className="p-5">
@@ -162,6 +178,7 @@ export function OverviewTab({
 
 export function LayoutTab({ plan, input }: { plan: GardenPlan; input: PlanInput }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const indoor = isIndoor(input);
   const areaById = new Map<string, Area>(input.areas.map((a) => [a.id, a]));
   const selectedPlant = plan.plants.find((p) => p.plantId === selected) ?? null;
   const counts = new Map(plan.plants.map((p) => [p.plantId, p.quantity]));
@@ -178,13 +195,23 @@ export function LayoutTab({ plan, input }: { plan: GardenPlan; input: PlanInput 
                 <span className="text-sm text-muted">
                   {layout.kind === "bed"
                     ? `${layout.widthFt} × ${layout.lengthFt} ft ${(area as BedArea | undefined)?.raised ? "raised bed" : "plot"}`
-                    : `${layout.pots.length} containers`}
+                    : indoor
+                      ? `${layout.pots.length} pots`
+                      : `${layout.pots.length} containers`}
                 </span>
               </div>
               {layout.kind === "bed" ? (
                 <BedGrid layout={layout} raised={(area as BedArea | undefined)?.raised ?? true} selected={selected} onSelect={setSelected} />
+              ) : indoor ? (
+                <WindowsillView layout={layout} selected={selected} onSelect={setSelected} growLight={input.indoor?.growLight !== "none"} />
               ) : (
                 <ContainerGrid layout={layout} selected={selected} onSelect={setSelected} />
+              )}
+              {indoor && (
+                <p className="mt-3 flex items-start gap-2 text-sm text-muted">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                  Keep pots within a foot of the glass, sun-lovers in the brightest spot, and turn them a quarter turn every few days.
+                </p>
               )}
               {layout.kind === "bed" && (
                 <p className="mt-3 flex items-start gap-2 text-sm text-muted">
@@ -198,7 +225,7 @@ export function LayoutTab({ plan, input }: { plan: GardenPlan; input: PlanInput 
       </div>
       <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
         {selectedPlant ? (
-          <PlantCard plant={selectedPlant} compact onClose={() => setSelected(null)} />
+          <PlantCard plant={selectedPlant} indoor={indoor} compact onClose={() => setSelected(null)} />
         ) : (
           <Card className="p-4 text-sm text-muted">Tap a plant in the layout to see its spacing, dates and tips.</Card>
         )}
@@ -232,7 +259,17 @@ export function LayoutTab({ plan, input }: { plan: GardenPlan; input: PlanInput 
 // Plants
 // ---------------------------------------------------------------------------
 
-export function PlantCard({ plant: pp, compact, onClose }: { plant: PlannedPlant; compact?: boolean; onClose?: () => void }) {
+export function PlantCard({
+  plant: pp,
+  indoor = false,
+  compact,
+  onClose,
+}: {
+  plant: PlannedPlant;
+  indoor?: boolean;
+  compact?: boolean;
+  onClose?: () => void;
+}) {
   const p = getPlant(pp.plantId);
   const s = pp.schedule;
   const howMany =
@@ -240,7 +277,12 @@ export function PlantCard({ plant: pp, compact, onClose }: { plant: PlannedPlant
       ? `${pp.quantity} cloves`
       : pp.plantId === "potato"
         ? `${pp.quantity} seed pieces`
-        : `${pp.quantity} plant${pp.quantity === 1 ? "" : "s"}`;
+        : pp.plantId === "microgreens"
+          ? `${pp.quantity} pot${pp.quantity === 1 ? "" : "s"} at a time`
+          : `${pp.quantity} plant${pp.quantity === 1 ? "" : "s"}`;
+  const scraps = indoor && p.indoor?.start === "scraps";
+  // Indoors, the outdoor growing tips (mulch, frost, hilling) don't apply.
+  const tips = indoor && p.indoor ? [p.indoor.tip, ...(p.petCaution ? [`Pets: ${p.petCaution}`] : [])] : p.tips;
   return (
     <Card className="p-4 sm:p-5">
       <div className="flex items-start gap-3">
@@ -261,9 +303,15 @@ export function PlantCard({ plant: pp, compact, onClose }: { plant: PlannedPlant
             <Chip>{howMany}</Chip>
             <Chip tone="neutral">{pp.spacing}</Chip>
             <Chip tone={pp.acquire === "starts" ? "sun" : "leaf"}>
-              {pp.acquire === "starts" ? (pp.plantId === "garlic" || pp.plantId === "potato" ? "Buy seed stock" : "Buy plants") : "From seed"}
+              {scraps
+                ? "From kitchen scraps"
+                : pp.acquire === "starts"
+                  ? pp.plantId === "garlic" || pp.plantId === "potato"
+                    ? "Buy seed stock"
+                    : "Buy plants"
+                  : "From seed"}
             </Chip>
-            {p.perennial && <Chip tone="sky">Perennial</Chip>}
+            {p.perennial && !indoor && <Chip tone="sky">Perennial</Chip>}
           </div>
         </div>
       </div>
@@ -272,9 +320,13 @@ export function PlantCard({ plant: pp, compact, onClose }: { plant: PlannedPlant
         {s.startIndoors ? (
           <DateBox label="Start indoors" date={s.startIndoors} />
         ) : (
-          <DateBox label={pp.acquire === "starts" ? "Buy" : "Get seeds"} date={null} note={pp.acquire === "starts" ? "a week before" : "anytime"} />
+          <DateBox
+            label={pp.acquire === "starts" ? "Buy" : "Get seeds"}
+            date={null}
+            note={pp.acquire === "starts" ? (indoor ? "a few days before" : "a week before") : "anytime"}
+          />
         )}
-        <DateBox label={s.method === "transplant" ? "Plant out" : "Sow"} date={s.plantOut} />
+        <DateBox label={s.method === "transplant" ? (indoor ? "Pot up" : "Plant out") : "Sow"} date={s.plantOut} />
         <DateBox label={p.category === "flower" ? "Blooms" : "Harvest"} date={s.harvestStart} end={s.harvestEnd} />
       </div>
 
@@ -305,7 +357,7 @@ export function PlantCard({ plant: pp, compact, onClose }: { plant: PlannedPlant
             <span className="hidden group-open:inline">Hide tips</span>
           </summary>
           <ul className="mt-2 space-y-2 text-sm leading-relaxed text-muted">
-            {p.tips.map((t) => (
+            {tips.map((t) => (
               <li key={t} className="flex gap-2">
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-leaf-500" />
                 {t}
@@ -320,7 +372,7 @@ export function PlantCard({ plant: pp, compact, onClose }: { plant: PlannedPlant
       )}
       {compact && (
         <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
-          {p.tips.slice(0, 2).map((t) => (
+          {tips.slice(0, 2).map((t) => (
             <li key={t} className="flex gap-2">
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-leaf-500" />
               {t}
@@ -342,11 +394,11 @@ function DateBox({ label, date, end, note }: { label: string; date: string | nul
   );
 }
 
-export function PlantsTab({ plan }: { plan: GardenPlan }) {
+export function PlantsTab({ plan, input }: { plan: GardenPlan; input: PlanInput }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {plan.plants.map((p) => (
-        <PlantCard key={p.plantId} plant={p} />
+        <PlantCard key={p.plantId} plant={p} indoor={isIndoor(input)} />
       ))}
     </div>
   );
@@ -357,6 +409,7 @@ export function PlantsTab({ plan }: { plan: GardenPlan }) {
 // ---------------------------------------------------------------------------
 
 export function CalendarTab({ plan, today, tasks }: { plan: GardenPlan; today: string; tasks: TaskState }) {
+  const indoor = plan.season === "indoor";
   const [showPast, setShowPast] = useState(false);
   const visible = plan.tasks.filter((t) => showPast || t.date >= today || !tasks.done.has(t.id));
   const byMonth = useMemo(() => {
@@ -371,7 +424,9 @@ export function CalendarTab({ plan, today, tasks }: { plan: GardenPlan; today: s
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="mb-3 font-display text-xl font-semibold">Season at a glance</h3>
+        <h3 className="mb-3 font-display text-xl font-semibold">
+          {indoor ? `The next ${Math.round(INDOOR_WEEKS / 4.3)} months at a glance` : "Season at a glance"}
+        </h3>
         <SeasonTimeline plants={plan.plants} today={today} />
       </div>
       <div>
@@ -531,6 +586,7 @@ export function ShoppingTab({ plan, gardenId }: { plan: GardenPlan; gardenId: st
 // ---------------------------------------------------------------------------
 
 export function CareTab({ plan, input }: { plan: GardenPlan; input: PlanInput }) {
+  if (isIndoor(input)) return <IndoorCareTab plan={plan} input={input} />;
   const feeds = plan.tasks.filter((t) => t.id.startsWith("feed:"));
   const containers = input.areas.some((a) => a.kind === "containers");
   const thirsty = plan.plants.filter((p) => getPlant(p.plantId).water === "high").map((p) => p.name.toLowerCase());
@@ -630,6 +686,145 @@ export function CareTab({ plan, input }: { plan: GardenPlan; input: PlanInput })
         </div>
       </Card>
     </div>
+  );
+}
+
+const LIGHT_NEEDS = { 1: "Low light is fine", 2: "Medium (east or west)", 3: "Bright (south or grow light)" } as const;
+
+function IndoorCareTab({ plan, input }: { plan: GardenPlan; input: PlanInput }) {
+  const feeds = plan.tasks.filter((t) => t.id.startsWith("feed:"));
+  const growLight = input.indoor?.growLight !== "none";
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-3">
+        <CareCard icon={<Droplets className="h-5 w-5" />} title="Watering" tone="sky">
+          Water when the top inch of mix feels dry, until it runs out the bottom, then empty the saucer after half an hour. Most pots need it every 3–7 days,
+          less in winter. Soggy roots kill more indoor plants than anything else.
+        </CareCard>
+        <CareCard icon={<Sprout className="h-5 w-5" />} title="Feeding" tone="leaf">
+          Potting mix runs out of food in about a month. Feed every 4 weeks with an all-purpose liquid fertilizer at half strength. Herbs taste best when you
+          don&apos;t overdo it.
+        </CareCard>
+        <CareCard icon={<Sun className="h-5 w-5" />} title="Light" tone="sun">
+          Keep pots within a foot of the glass and turn them a quarter turn every few days.{" "}
+          {growLight
+            ? "Run the grow light 14–16 hours a day on a timer, 6–12 inches above the leaves."
+            : "Growth slows in the short days of winter; a small LED grow light keeps it going."}
+        </CareCard>
+      </div>
+
+      <Card className="p-5">
+        <h3 className="mb-3 flex items-center gap-2 font-display text-lg font-semibold">
+          <TriangleAlert className="h-5 w-5 text-sun-600" />
+          Indoor troubles, and quick fixes
+        </h3>
+        <ul className="space-y-2 text-[15px] leading-relaxed">
+          <li>
+            <span className="font-semibold">Tiny flies around the pots:</span>{" "}
+            <span className="text-muted">fungus gnats. Let the top inch dry out between waterings and add a yellow sticky card.</span>
+          </li>
+          <li>
+            <span className="font-semibold">Tall, pale, floppy stems:</span>{" "}
+            <span className="text-muted">not enough light. Move closer to the glass, or add a grow light.</span>
+          </li>
+          <li>
+            <span className="font-semibold">Sticky leaves or fine webbing:</span>{" "}
+            <span className="text-muted">aphids or spider mites. Rinse the plant in the sink and wipe leaves with mild soapy water.</span>
+          </li>
+          <li>
+            <span className="font-semibold">Crispy leaf edges in winter:</span>{" "}
+            <span className="text-muted">dry heated air. Group pots together or set them on a tray of pebbles and water.</span>
+          </li>
+        </ul>
+      </Card>
+
+      {feeds.length > 0 && (
+        <Card className="p-5">
+          <h3 className="mb-3 font-display text-lg font-semibold">Feeding schedule</h3>
+          <ul className="flex flex-wrap gap-2">
+            {feeds.map((f) => (
+              <li key={f.id} className="rounded-full bg-leaf-50 px-3 py-1 text-sm font-medium text-leaf-700">
+                {fmtShort(f.date)}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
+      <Card className="overflow-hidden">
+        <h3 className="px-5 pt-5 font-display text-lg font-semibold">Plant by plant</h3>
+        <div className="overflow-x-auto">
+          <table className="mt-3 w-full min-w-[560px] text-left text-sm">
+            <thead className="bg-cream text-xs uppercase tracking-wide text-faint">
+              <tr>
+                <th className="px-5 py-2 font-semibold">Plant</th>
+                <th className="px-3 py-2 font-semibold">Water</th>
+                <th className="px-3 py-2 font-semibold">Light</th>
+                <th className="px-3 py-2 font-semibold">Pets</th>
+                <th className="px-3 py-2 font-semibold">Harvest window</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {plan.plants.map((pp) => {
+                const p = PLANTS_BY_ID[pp.plantId];
+                return (
+                  <tr key={pp.plantId}>
+                    <td className="px-5 py-2.5 font-semibold">
+                      {pp.emoji} {pp.name}
+                    </td>
+                    <td className="px-3 py-2.5 capitalize text-muted">{p.water}</td>
+                    <td className="px-3 py-2.5 text-muted">{p.indoor ? LIGHT_NEEDS[p.indoor.light] : "-"}</td>
+                    <td className="px-3 py-2.5 text-muted">{p.petCaution ? "Keep away from pets" : "Pet-friendly"}</td>
+                    <td className="px-3 py-2.5 text-muted">
+                      {fmtShort(pp.schedule.harvestStart)} – {fmtLong(pp.schedule.harvestEnd)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function IndoorSetupCard({ input }: { input: PlanInput }) {
+  const setup = input.indoor;
+  const pots = input.areas.filter((a) => a.kind === "containers");
+  const rows: [string, string][] = [
+    ["Window", setup ? (setup.window === "unsure" ? "Not sure" : WINDOW_LABELS[setup.window]) : "Window"],
+    ["Grow light", setup?.growLight === "have" ? "Yes" : setup?.growLight === "buy" ? "Getting one" : "No"],
+    [
+      "Pots",
+      pots
+        .map((p) => (p.kind === "containers" ? `${p.count} × ${p.potIn ?? potInchesForGallons(p.gallons)}-inch` : ""))
+        .join(", "),
+    ],
+    ["Pets", setup?.pets ? "Yes, pet-safe picks" : "No"],
+  ];
+  return (
+    <Card className="overflow-hidden">
+      <div className="bg-gradient-to-br from-leaf-600 to-leaf-800 p-5 text-white">
+        <p className="text-xs font-bold uppercase tracking-widest text-leaf-100">Your setup</p>
+        <p className="mt-1 font-display text-3xl font-semibold">Indoors 🪟</p>
+        <p className="text-sm text-leaf-100">
+          ZIP {input.zip}
+          {input.climate.state ? ` · ${input.climate.state}` : ""}
+        </p>
+      </div>
+      <dl className="divide-y divide-line text-sm">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex justify-between gap-3 px-5 py-3">
+            <dt className="text-muted">{k}</dt>
+            <dd className="text-right font-semibold">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-faint">
+        Indoors, light sets the pace, not frost. Dates run from when you start, at room temperature.
+      </p>
+    </Card>
   );
 }
 

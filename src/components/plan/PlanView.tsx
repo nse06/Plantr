@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CalendarDays, Check, ClipboardList, Heart, LayoutGrid, Leaf, Share2, ShoppingBasket, Sprout } from "lucide-react";
 import type { GardenPlan, PlanInput } from "@/lib/garden/types";
 import { todayISO } from "@/lib/garden/dates";
+import { seasonLabel } from "@/lib/garden/progress";
 import { useTaskDone } from "@/components/garden/tasks";
 import { Button, Chip, Spinner, buttonClass, cx } from "@/components/ui";
 import { CalendarTab, CareTab, LayoutTab, OverviewTab, PlantsTab, ShoppingTab } from "./sections";
@@ -102,7 +103,6 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
     } catch {}
   }
 
-  const seasonLabel = plan.season === "fall" ? `Fall ${plan.year}` : `${plan.year} season`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:pt-8">
@@ -120,8 +120,8 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
           <div>
             <h1 className="font-display text-3xl font-semibold leading-tight sm:text-4xl">{garden.name}</h1>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              <Chip>Zone {input.climate.zone}</Chip>
-              <Chip tone="neutral">{seasonLabel}</Chip>
+              <Chip>{plan.season === "indoor" ? "🪟 Indoors" : `Zone ${input.climate.zone}`}</Chip>
+              <Chip tone="neutral">{seasonLabel(plan)}</Chip>
               <Chip tone="neutral">ZIP {input.zip}</Chip>
               {saved && (
                 <Chip tone="sun">
@@ -168,7 +168,7 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
       <div className="mt-6 animate-rise" key={tab}>
         {tab === "overview" && <OverviewTab plan={plan} input={input} today={today} tasks={{ done: tasks.done, toggle: saved ? tasks.toggle : undefined }} onTab={selectTab} />}
         {tab === "layout" && <LayoutTab plan={plan} input={input} />}
-        {tab === "plants" && <PlantsTab plan={plan} />}
+        {tab === "plants" && <PlantsTab plan={plan} input={input} />}
         {tab === "calendar" && <CalendarTab plan={plan} today={today} tasks={{ done: tasks.done, toggle: saved ? tasks.toggle : undefined }} />}
         {tab === "shopping" && <ShoppingTab plan={plan} gardenId={garden.id} />}
         {tab === "care" && <CareTab plan={plan} input={input} />}

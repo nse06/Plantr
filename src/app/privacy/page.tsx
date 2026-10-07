@@ -9,7 +9,9 @@ export default function PrivacyPage() {
       <div className="mt-6 space-y-5 text-[17px] leading-relaxed text-muted">
         <p>
           <strong className="text-ink">Your photo.</strong> When you add a photo, it&apos;s sent to our AI provider (Anthropic) to estimate your
-          space&apos;s size and sunlight. We store only a small thumbnail on your plan, never the original photo.
+          space&apos;s size and sunlight. We store only a small thumbnail on your plan, never the original photo. To avoid paying twice for the
+          same request, we keep the AI&apos;s written results (never the photo itself) for up to 30 days, filed under a one-way fingerprint of the
+          request.
         </p>
         <p>
           <strong className="text-ink">Your plan.</strong> We store your answers (ZIP code, space, preferences) and the plan we generate so you can

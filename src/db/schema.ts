@@ -46,7 +46,7 @@ export const gardens = sqliteTable(
       .default("draft"),
     zip: text("zip").notNull(),
     zone: text("zone").notNull(),
-    season: text("season", { enum: ["spring", "fall"] }).notNull(),
+    season: text("season", { enum: ["spring", "fall", "indoor"] }).notNull(),
     year: integer("year").notNull(),
     input: text("input", { mode: "json" }).$type<PlanInput>().notNull(),
     plan: text("plan", { mode: "json" }).$type<GardenPlan>().notNull(),
@@ -92,6 +92,37 @@ export const rateLimits = sqliteTable("rate_limits", {
   key: text("key").primaryKey(),
   windowStart: integer("window_start").notNull(),
   count: integer("count").notNull(),
+});
+
+/** Every AI call: tokens, estimated cost and outcome. Powers cost reporting and the daily budget guard. */
+export const aiUsage = sqliteTable(
+  "ai_usage",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    feature: text("feature").notNull(),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    /** Part of outputTokens spent on reasoning; the main lever behind the effort setting. */
+    thinkingTokens: integer("thinking_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    /** ok | cached | refusal | error */
+    outcome: text("outcome").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("ai_usage_created_idx").on(t.createdAt)],
+);
+
+/** Results of identical AI requests, reused instead of paying for them twice. */
+export const aiCache = sqliteTable("ai_cache", {
+  key: text("key").primaryKey(),
+  feature: text("feature").notNull(),
+  value: text("value", { mode: "json" }).notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  createdAt: text("created_at").notNull(),
 });
 
 export type User = typeof users.$inferSelect;

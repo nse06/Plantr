@@ -2,7 +2,7 @@
 
 **Take a photo of your space, tell us what you want to grow, and we'll tell you exactly what to plant, where to put it, and when to do it.**
 
-Plantr is a consumer web app that helps beginner and casual U.S. gardeners design, plan and keep up with a home garden. It's built mobile-first and works without an account; saving a plan unlocks weekly reminders, task check-offs, a harvest log and garden-aware Q&A.
+Plantr is a consumer web app that helps beginner and casual U.S. gardeners design, plan and keep up with a home garden: beds, a patio of containers, or a windowsill. It's built mobile-first and works without an account; saving a plan unlocks weekly reminders, task check-offs, a harvest log and garden-aware Q&A.
 
 | Layer | What the gardener gets |
 | --- | --- |
@@ -35,6 +35,17 @@ Plantr deliberately splits the work between **AI judgment** and a **deterministi
 - **The model decides _what_** to grow, how much, which variety and why, from a list of plants the engine has already confirmed will work for that place, season, sun and space. Structured outputs keep the response machine-readable.
 - **The engine decides _where_ and _when_.** It owns every date, spacing rule and square foot, so an AI mistake can never produce an impossible plan. Unknown or infeasible picks are dropped (with a reason), quantities are fitted to the real space, and plants the user explicitly asked for are never silently ignored.
 - **No API key? Still a great plan.** A rule-based designer scores the catalog against the user's goals, notes, experience, time, sun and space, balances goals round-robin and sizes quantities to the household. It's also the automatic fallback if the AI call fails or times out.
+- **The AI is used where it earns its cost.** By default the rule-based designer handles plans with nothing to interpret (no photo, no typed notes), and the model is called for photos and for people's own words. See [AI cost controls](#ai-cost-controls).
+
+### Indoor and windowsill gardens
+
+Choose **Indoors** in the wizard (or start from `/plan/new?space=indoor`). Light, not frost, is the limit indoors, so the engine works differently:
+
+- **Light:** the window's direction (south is brightest in the U.S.) and whether there's a grow light set a light level from 1 to 3. Each indoor-capable plant needs a minimum level; fruiting crops (dwarf cherry tomatoes, hot peppers, strawberries) need a grow light.
+- **Pots:** pots are sized in inches (4–12 in). Every indoor plant has a smallest workable pot and a plants-per-pot rule, and plans fill every pot on the sill.
+- **Calendar:** plans start a few days from today and run for six months at room temperature, with re-sowing for quick crops (microgreens every 2 weeks, lettuce and arugula every 3). Herbs bought as plants, green onions regrown from grocery-store scraps, and seeds each get their own steps.
+- **Pets:** with cats or dogs at home, plants on the ASPCA toxic list (chives, green onions, mint, oregano, parsley, tomato leaves) are left out unless the person asks for them, and then they get a warning.
+- **Everything else follows:** a windowsill layout view, indoor tasks (pots and saucers, grow-light timer, hand-pollinating, fungus gnats), an indoor shopping list, indoor care advice, and photo analysis that estimates sill length and how many pots fit.
 
 ### Climate data
 
@@ -54,7 +65,7 @@ Regenerate the data with `npm run data:climate` (see `scripts/build_climate_data
 
 ### Plant catalog
 
-`src/lib/garden/plants.ts` holds 47 curated vegetables, herbs, flowers and fruit with spacing, timing relative to frost, days to maturity, harvest length, sun, water, feeding, supports, container sizes, companions and conflicts, beginner-friendly varieties, tips and typical prices. This data is the backbone of every plan, so it lives in code, versioned and unit-tested.
+`src/lib/garden/plants.ts` holds 48 curated vegetables, herbs, flowers and fruit with spacing, timing relative to frost, days to maturity, harvest length, sun, water, feeding, supports, container sizes, companions and conflicts, beginner-friendly varieties, tips and typical prices. 18 of them also carry indoor rules (light needed, smallest pot, plants per pot, how to start, days to harvest, re-sowing, compact varieties) and pet warnings. This data is the backbone of every plan, so it lives in code, versioned and unit-tested.
 
 ---
 
@@ -91,16 +102,19 @@ src/
     climate.ts, temps.ts   Climate helpers, temperature interpolation
     schedule.ts            Season-aware planting calendar per plant
     recommend.ts           Feasibility, rule-based designer, design normalization
+    indoor.ts              Indoor light levels, pot sizes, feasibility and calendar
     layout.ts              Square-foot bed layout and container assignment
     tasks.ts, shopping.ts  Dated task list and priced shopping list
     plan.ts                buildPlan(): ties it all together
     data/                  Bundled NOAA station and ZIP data (server-only)
-  lib/ai/                  Claude integrations: photo.ts, design.ts, ask.ts
+  lib/ai/                  Claude integrations: photo.ts, design.ts, ask.ts, plus
+                           client.ts (per-feature settings), pricing.ts, usage.ts
+                           (usage log, daily budget, result cache)
   lib/server/              Auth, sessions, gardens data access, rate limiting, email,
                            weekly digest, climate lookup, plan generation
   db/                      Drizzle schema and client
 drizzle/                   SQL migrations
-scripts/                   migrate.ts, build_climate_data.py
+scripts/                   migrate.ts, build_climate_data.py, ai-usage.ts, ai-sweep.ts
 ```
 
 ---
@@ -127,6 +141,9 @@ npm run build        # production build
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | AI features | Photo analysis, AI design, Ask Plantr. Without it, everything else still works. |
 | `PLANTR_MODEL` | Optional | Defaults to `claude-opus-5-5`. |
+| `PLANTR_AI_DESIGN` | Optional | `smart` (default), `always` or `never`. See [AI cost controls](#ai-cost-controls). |
+| `PLANTR_AI_DAILY_BUDGET_USD` | Optional | Estimated daily AI spend cap. Default `10`; `off` removes it. |
+| `PLANTR_<FEATURE>_EFFORT`, `PLANTR_<FEATURE>_MODEL` | Optional | Per-feature effort and model, where the feature is `PHOTO`, `DESIGN` or `ASK`. |
 | `DATABASE_URL` / `DATABASE_AUTH_TOKEN` | Production | Turso URL and token (the Vercel Turso integration's `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` also work). Defaults to `file:local.db`. |
 | `AUTH_SECRET` | Production | Signs unsubscribe links. `openssl rand -base64 32`. |
 | `APP_URL` | Production | Public URL used in emailed links. Never derived from request headers in production. |
@@ -148,18 +165,46 @@ The plan and photo endpoints set `maxDuration = 120`. AI design typically takes 
 - Sign-in links are one-time, expire after 30 minutes, and need a button tap, so email scanners that pre-fetch links can't use them up.
 - All input is validated with Zod, mutating endpoints check the `Origin` header, and redirects are restricted to in-app paths.
 - Database-backed rate limits protect the AI and email endpoints (per IP, per email, per user).
-- Only a small photo thumbnail is stored. Users can delete their account and all data from the account page. Every digest email has a signed one-click unsubscribe (RFC 8058).
+- Only a small photo thumbnail is stored. AI results (never photos) are cached for up to 30 days under a one-way hash of the request. Users can delete their account and all data from the account page. Every digest email has a signed one-click unsubscribe (RFC 8058).
 
 ## Operating cost
 
-- **AI:** at Claude Opus 5.5 rates ($4 / $20 per million input/output tokens), a full plan with a photo uses roughly 10–15K tokens, about **$0.10–0.20 per plan** (an estimate; it varies with the garden and the model's reasoning). Ask Plantr answers are a few cents. Set `PLANTR_MODEL` to trade quality for cost.
+- **AI:** about **$0.06–0.11 for a plan with a photo** and **$0.04–0.08 for one with typed notes** at Claude Opus 5.5 rates ($4 / $20 per million input/output tokens). Plans with neither cost nothing, because the rule-based designer handles them. Ask Plantr answers are a cent or two. These are estimates from prompt sizes; `npm run ai:usage` reports the real numbers once there's traffic.
 - **Everything else** fits in the free or hobby tiers of Vercel, Turso and Resend at launch scale.
+
+### AI cost controls
+
+Most of the cost is output tokens, and most of those are the model's reasoning, so the main levers are how often the model is called and how hard it thinks.
+
+| Control | Default | What it does |
+| --- | --- | --- |
+| Smart design (`PLANTR_AI_DESIGN`) | `smart` | Calls the AI designer only when there's a photo or typed notes. `always` or `never` override it. |
+| Effort (`PLANTR_<FEATURE>_EFFORT`) | photo `low`, design `medium`, ask `low` | Reasoning effort per feature: `low`, `medium` or `high`. |
+| Model (`PLANTR_<FEATURE>_MODEL`) | `PLANTR_MODEL` | A cheaper model for one feature, e.g. `PLANTR_ASK_MODEL=claude-sonnet-5-5`. Parameters a model doesn't accept are dropped automatically. |
+| Compact design prompt | always on | Only the best-ranked ~24 plants that work for this garden, not the whole catalog: about 1.5K input tokens instead of 5K. Short reasons, two-sentence summary, three tips. |
+| Smaller photos | always on | Photos are resized to 1024 px in the browser: about 1K image tokens instead of 2.5K. |
+| Result cache (`PLANTR_AI_CACHE`) | on | Identical design requests and repeat photos reuse the earlier result (7 and 30 days). |
+| Daily budget (`PLANTR_AI_DAILY_BUDGET_USD`) | `10` | Once the day's estimated spend reaches the cap, plans use the rule-based designer until midnight UTC. Also set a monthly spend limit in the Claude Console. |
+| Rate limits | always on | Per IP and per user, on photos, plans and questions. |
+
+Every call is logged to the `ai_usage` table with tokens, reasoning tokens, estimated cost, latency and outcome.
+
+```bash
+npm run ai:usage                 # spend and tokens by feature, last 1, 7 and 30 days
+npm run ai:sweep                 # plan a comparison of effort levels (sends nothing)
+npm run ai:sweep -- --yes        # run it: 6 sample gardens × low and medium effort
+npm run ai:sweep -- --yes --efforts low --models claude-opus-5-5,claude-sonnet-5-5
+```
+
+The sweep prints tokens, cost and latency per setting, then the plans side by side. Switch to a cheaper setting only if the plans still read well.
 
 ## Testing
 
-`npm test` runs the engine test suite. It covers dates, frost-date math, scheduling across real climates (Seattle, Chicago, Denver, Phoenix, Miami, Austin), layout packing, recommendations, digest rendering and signed links.
+`npm test` runs the test suite. It covers dates, frost-date math, scheduling across real climates (Seattle, Chicago, Denver, Phoenix, Miami, Austin), layout packing, recommendations, indoor light, pots, pets and calendars, the AI prompt, cost estimates and settings, request validation, digest rendering and signed links.
 
 ## Roadmap ideas
+
+See [docs/BACKLOG.md](docs/BACKLOG.md) for the full list, including Pro-plan ideas and remaining spec items.
 
 - Push notifications and an installable PWA experience (the manifest is in place).
 - Regenerate a plan mid-season and carry over completed tasks.

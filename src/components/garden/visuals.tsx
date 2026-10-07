@@ -224,6 +224,73 @@ export function ContainerGrid({
   );
 }
 
+/** Indoor gardens: pots in a row along the windowsill, with the window (and any grow light) above. */
+export function WindowsillView({
+  layout,
+  selected,
+  onSelect,
+  growLight,
+}: {
+  layout: ContainerLayout;
+  selected: string | null;
+  onSelect?: (plantId: string | null) => void;
+  growLight?: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl ring-1 ring-line">
+      <div className="relative h-20 sm:h-24" style={{ background: "linear-gradient(#d7e9f7, #eef5fb 70%, #fff)" }} aria-hidden>
+        <div className="absolute inset-x-6 bottom-0 top-0 grid grid-cols-2 gap-1.5 border-x-[6px] border-t-[6px] border-paper sm:inset-x-12">
+          <div style={{ background: "rgba(255,255,255,0.35)" }} />
+          <div style={{ background: "rgba(255,255,255,0.35)" }} />
+        </div>
+        {growLight && (
+          <div
+            className="absolute inset-x-10 top-2 h-2.5 rounded-full bg-sun-300 sm:inset-x-16"
+            style={{ boxShadow: "0 6px 24px 6px rgba(242,179,61,0.45)" }}
+          />
+        )}
+      </div>
+      <div className="no-scrollbar flex items-end gap-2 overflow-x-auto bg-paper px-3 pt-2 sm:gap-3 sm:px-6">
+        {layout.pots.map((pot, i) => {
+          const p = pot.plantId ? PLANTS_BY_ID[pot.plantId] : null;
+          const dim = selected && pot.plantId !== selected;
+          const inches = pot.potIn ?? 6;
+          const width = 46 + inches * 4;
+          return (
+            <button
+              key={i}
+              type="button"
+              disabled={!pot.plantId}
+              onClick={() => pot.plantId && onSelect?.(selected === pot.plantId ? null : pot.plantId)}
+              className={cx("flex shrink-0 flex-col items-center text-center transition-opacity", dim && "opacity-40")}
+              style={{ width }}
+            >
+              <span className="relative text-3xl leading-none" style={{ filter: selected === pot.plantId ? "drop-shadow(0 0 6px #f2b33d)" : undefined }}>
+                {p ? p.emoji : <span className="text-xs text-faint">empty</span>}
+                {p && pot.count > 1 && (
+                  <span className="absolute -right-3 -top-1 rounded-full bg-ink px-1.5 text-[11px] font-bold text-white">×{pot.count}</span>
+                )}
+              </span>
+              <span
+                className="mt-1 flex w-full items-center justify-center text-[11px] font-bold text-white"
+                style={{
+                  height: 18 + inches * 2,
+                  background: p ? "#c8643b" : "#d9b8a6",
+                  clipPath: "polygon(4% 0, 96% 0, 84% 100%, 16% 100%)",
+                }}
+              >
+                {inches}&Prime;
+              </span>
+              <span className="mt-1 w-full truncate pb-1 text-xs font-semibold leading-tight text-ink">{p ? p.name : "Spare pot"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="h-3" style={{ background: "#c9a27a" }} aria-hidden />
+    </div>
+  );
+}
+
 /** Gantt-style season timeline: seed starting, growing and harvest windows per plant. */
 export function SeasonTimeline({ plants, today }: { plants: PlannedPlant[]; today: string }) {
   if (plants.length === 0) return null;

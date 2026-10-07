@@ -86,7 +86,7 @@ export default async function GardenDashboard() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-display text-lg font-semibold">{g.name}</p>
                         <div className="mt-1 flex flex-wrap gap-1">
-                          <Chip>Zone {g.zone}</Chip>
+                          <Chip>{g.season === "indoor" ? "🪟 Indoors" : `Zone ${g.zone}`}</Chip>
                           <Chip tone="neutral">{g.plan.plants.length} crops</Chip>
                         </div>
                       </div>

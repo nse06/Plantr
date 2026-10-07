@@ -2,6 +2,7 @@ import type { Climate, Plant, PlanSeason, PlantSchedule } from "./types";
 import { addDays, addWeeks, diffDays, maxISO, minISO, mmddToISO } from "./dates";
 import { parseZone } from "./climate";
 import { firstDayWhere } from "./temps";
+import { indoorSchedule } from "./indoor";
 
 /** How long each frost class keeps producing after the average first fall frost. */
 const FROST_TOLERANCE_DAYS: Record<Plant["frost"], number> = {
@@ -128,6 +129,11 @@ export function fallEligible(plant: Plant, ctx: SeasonContext): boolean {
  * Pure and deterministic: the same inputs always produce the same calendar.
  */
 export function computeSchedule(plant: Plant, ctx: SeasonContext): ScheduleResult {
+  if (ctx.season === "indoor") {
+    const schedule = indoorSchedule(plant, ctx);
+    return schedule ? { ok: true, schedule, mustBuyStarts: false } : fail(`${plant.name} needs an outdoor garden.`);
+  }
+  if (plant.indoorOnly) return fail(`${plant.name} are grown indoors. Plan an indoor garden to grow them.`);
   return ctx.season === "spring" ? springSchedule(plant, ctx) : fallSchedule(plant, ctx);
 }
 

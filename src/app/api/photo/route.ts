@@ -21,6 +21,6 @@ export async function POST(req: Request) {
   if (!match) return error("Unsupported image format. Use a JPEG, PNG or WebP photo.");
   const mediaType = match[1] as "image/jpeg" | "image/png" | "image/webp";
 
-  const analysis = await analyzePhoto(match[2], mediaType);
+  const analysis = await analyzePhoto(match[2], mediaType, parsed.data.mode);
   return json({ analysis, aiEnabled: true });
 }

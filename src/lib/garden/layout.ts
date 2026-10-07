@@ -1,5 +1,6 @@
 import type { Area, AreaLayout, BedArea, BedLayout, ContainerLayout, LayoutCell, Plant } from "./types";
 import { getPlant } from "./plants";
+import { plantsPerIndoorPot } from "./indoor";
 
 // Square-foot-garden layout. The top edge of every bed is north: tall and trellised crops
 // go there so they don't shade shorter ones. Beds are drawn with their long side horizontal.
@@ -160,8 +161,14 @@ const POT_PREFERRED = new Set(["mint", "rosemary", "thyme", "oregano", "sage", "
 interface Pot {
   areaIndex: number;
   gallons: number;
+  /** Indoor pots are sized in inches and follow the indoor plant rules. */
+  potIn?: number;
   plantId: string | null;
   count: number;
+}
+
+function potFits(plant: Plant, pot: Pot): number {
+  return pot.potIn ? plantsPerIndoorPot(plant, pot.gallons) : plantsPerPot(plant, pot.gallons);
 }
 
 function placeInPots(pots: Pot[], plant: Plant, quantity: number): number {
@@ -169,11 +176,11 @@ function placeInPots(pots: Pot[], plant: Plant, quantity: number): number {
   // Use the smallest pot that fits first so big pots stay free for big plants.
   const order = pots
     .map((p, i) => ({ p, i }))
-    .filter(({ p }) => p.plantId === null && plantsPerPot(plant, p.gallons) > 0)
+    .filter(({ p }) => p.plantId === null && potFits(plant, p) > 0)
     .sort((a, b) => a.p.gallons - b.p.gallons || a.i - b.i);
   for (const { p } of order) {
     if (remaining <= 0) break;
-    const n = Math.min(plantsPerPot(plant, p.gallons), remaining);
+    const n = Math.min(potFits(plant, p), remaining);
     p.plantId = plant.id;
     p.count = n;
     remaining -= n;
@@ -186,7 +193,7 @@ export function layoutGarden(areas: Area[], requests: LayoutRequest[]): LayoutRe
   const pots: Pot[] = [];
   areas.forEach((a, areaIndex) => {
     if (a.kind !== "containers") return;
-    for (let i = 0; i < a.count; i++) pots.push({ areaIndex, gallons: a.gallons, plantId: null, count: 0 });
+    for (let i = 0; i < a.count; i++) pots.push({ areaIndex, gallons: a.gallons, potIn: a.potIn, plantId: null, count: 0 });
   });
 
   const placed: Record<string, number> = {};
@@ -248,7 +255,7 @@ export function layoutGarden(areas: Area[], requests: LayoutRequest[]): LayoutRe
         name: area.name,
         pots: pots
           .filter((p) => p.areaIndex === areaIndex)
-          .map((p) => ({ plantId: p.plantId, count: p.count, gallons: p.gallons })),
+          .map((p) => ({ plantId: p.plantId, count: p.count, gallons: p.gallons, ...(p.potIn ? { potIn: p.potIn } : {}) })),
       };
       layouts.push(c);
     }

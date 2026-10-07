@@ -9,12 +9,12 @@ export const metadata: Metadata = {
   description: "Answer a few quick questions and get a personalized garden layout, planting calendar and shopping list.",
 };
 
-type Props = { searchParams: Promise<{ goal?: string | string[] }> };
+type Props = { searchParams: Promise<{ goal?: string | string[]; space?: string }> };
 
 export default async function NewPlanPage({ searchParams }: Props) {
-  const { goal } = await searchParams;
+  const { goal, space } = await searchParams;
   const requested = (Array.isArray(goal) ? goal : goal ? [goal] : []).filter((g): g is Goal =>
     GOALS.some((x) => x.id === g),
   );
-  return <Wizard aiEnabled={aiEnabled()} initialGoals={requested} />;
+  return <Wizard aiEnabled={aiEnabled()} initialGoals={requested} initialIndoor={space === "indoor"} />;
 }

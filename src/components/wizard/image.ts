@@ -1,6 +1,6 @@
 // Client-side image handling: phones produce 4–12 MB photos; we downscale before upload.
-// 1568 px on the long edge is the most detail the vision model uses, so going bigger only
-// costs bandwidth.
+// 1024 px on the long edge is plenty to judge a space's size and light, and uses well under
+// half the image tokens of the model's 1568 px maximum (about 1,000 tokens instead of 2,500).
 
 async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
   if ("createImageBitmap" in window) {
@@ -45,7 +45,7 @@ export async function prepareImage(file: File): Promise<{ full: string; thumb: s
   } catch {
     throw new Error("We couldn't read that photo. Try a JPEG or PNG (on iPhone, use 'Most Compatible' camera format).");
   }
-  const full = draw(source, 1568, 0.85);
+  const full = draw(source, 1024, 0.85);
   const thumb = draw(source, 480, 0.72);
   if ("close" in source) source.close();
   return { full, thumb };

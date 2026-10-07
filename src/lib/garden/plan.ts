@@ -1,17 +1,21 @@
 import type { Design, GardenPlan, PlanInput, PlannedPlant } from "./types";
-import { getPlant, spacingLabel } from "./plants";
+import { getPlant, PLANTS_BY_ID, spacingLabel } from "./plants";
 import { seasonContext, type SeasonContext } from "./schedule";
 import {
   capacityUnits,
   designUnits,
   evaluateCatalog,
+  fillSparePots,
   fitDesignToSpace,
   growToFill,
+  mentionsPlant,
   normalizeDesign,
+  templateText,
   type CatalogEvaluation,
   type Candidate,
 } from "./recommend";
-import { layoutGarden, plantableSqFt, potCount } from "./layout";
+import { layoutGarden, maxPotGallons, plantableSqFt, potCount } from "./layout";
+import { indoorSpacingLabel, isIndoor } from "./indoor";
 import { buildTasks } from "./tasks";
 import { buildShopping } from "./shopping";
 import { minISO } from "./dates";
@@ -23,6 +27,7 @@ export function planContext(input: PlanInput, today: string): { ctx: SeasonConte
 
 function acquireFor(c: Candidate, input: PlanInput): "seeds" | "starts" {
   const p = c.plant;
+  if (isIndoor(input)) return p.indoor?.start === "seeds" ? "seeds" : "starts";
   if (p.overwinter || p.id === "potato" || p.id === "strawberry") return "starts";
   if (p.method === "direct") return "seeds";
   if (c.mustBuyStarts || !c.schedule.startIndoors) return "starts";
@@ -42,6 +47,7 @@ export function buildPlan(input: PlanInput, rawDesign: Design, today: string): G
   if (design.source === "ai" && designUnits(design, input) < capacityUnits(input) * 0.5) {
     growToFill(design.selections, input);
   }
+  if (isIndoor(input)) fillSparePots(design, input, evaluation);
   const candidates = new Map(evaluation.feasible.map((c) => [c.plant.id, c]));
 
   const { layouts, placed } = layoutGarden(
@@ -73,7 +79,7 @@ export function buildPlan(input: PlanInput, rawDesign: Design, today: string): G
       variety: sel.variety,
       quantity: n,
       placed: n,
-      spacing: spacingLabel(plant),
+      spacing: isIndoor(input) ? indoorSpacingLabel(plant, maxPotGallons(input.areas)) : spacingLabel(plant),
       reason: sel.reason,
       schedule:
         n < sel.quantity
@@ -81,6 +87,21 @@ export function buildPlan(input: PlanInput, rawDesign: Design, today: string): G
           : base,
       acquire,
     });
+  }
+
+  // The AI wrote its summary and tips before the engine checked its picks. Never let them talk
+  // about a plant that isn't in the final plan.
+  let { summary, tips } = design;
+  if (design.source === "ai") {
+    const kept = new Set(plants.map((p) => p.plantId));
+    const dropped = rawDesign.selections
+      .map((s) => PLANTS_BY_ID[s.plantId])
+      .filter((p): p is NonNullable<typeof p> => Boolean(p) && !kept.has(p.id));
+    const mentions = (text: string) => dropped.some((p) => mentionsPlant(text, p));
+    const template = templateText(input, ctx, design.selections.filter((s) => kept.has(s.plantId)));
+    if (mentions(summary)) summary = template.summary;
+    tips = tips.filter((t) => !mentions(t));
+    if (tips.length < 2) tips = [...tips, ...template.tips.filter((t) => !tips.includes(t))].slice(0, 4);
   }
 
   // If something only partly fit, the layout reflects what was actually placed.
@@ -101,8 +122,8 @@ export function buildPlan(input: PlanInput, rawDesign: Design, today: string): G
     createdAt: new Date().toISOString(),
     season: input.season,
     year: input.year,
-    summary: design.summary,
-    tips: design.tips,
+    summary,
+    tips,
     skipped: dedupeSkipped(skipped),
     plants,
     layouts,

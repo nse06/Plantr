@@ -2,6 +2,7 @@ import type { PlanInput, PlannedPlant, PlanTask, TaskCategory } from "./types";
 import { getPlant } from "./plants";
 import { addDays, addWeeks, fmtShort, maxISO, minISO, nextSaturday } from "./dates";
 import type { SeasonContext } from "./schedule";
+import { indoorLight } from "./indoor";
 
 // Turns the plant schedules into a dated, checkable to-do list. Task ids are deterministic
 // (kind + plant + date) so completion state survives regenerating the plan.
@@ -52,6 +53,7 @@ function buyStartsTask(p: PlannedPlant): { title: string; detail: string } {
 const THIN_AFTER: Record<string, number> = { radish: 10, arugula: 12, spinach: 14, lettuce: 14, "bok-choy": 14 };
 
 export function buildTasks(plants: PlannedPlant[], input: PlanInput, ctx: SeasonContext): PlanTask[] {
+  if (ctx.season === "indoor") return buildIndoorTasks(plants, input, ctx);
   const tasks: PlanTask[] = [];
   const { today } = ctx;
   const add = (t: Omit<PlanTask, "date"> & { date: string }) => {
@@ -375,6 +377,198 @@ function weeklyCheck(
 
   return {
     title: harvesting.length ? "Weekly check-in & harvest" : "Weekly garden check-in",
+    detail: items.join(" · "),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Indoor gardens: no frost, no beds. Pots, light, watering and re-sowing.
+// ---------------------------------------------------------------------------
+
+function indoorBuyTask(p: PlannedPlant): { title: string; detail: string } {
+  if (p.plantId === "basil" && p.quantity > 1) {
+    const pots = Math.max(1, Math.ceil(p.quantity / 3));
+    return {
+      title: `Buy ${pots === 1 ? "a potted basil plant" : `${pots} potted basil plants`}`,
+      detail: `Grocery-store basil is several seedlings crammed into one pot. Tease it apart into ${Math.min(p.quantity, 3 * pots)} clumps and pot them up separately.`,
+    };
+  }
+  return {
+    title: `Buy ${plantsLabel(p.quantity, p.name)}`,
+    detail: `Small potted plants from a garden center or grocery store are the quickest start${p.variety ? ` ('${p.variety}' or similar)` : ""}. Pick bushy ones without yellow leaves.`,
+  };
+}
+
+function indoorSowDetail(p: PlannedPlant): string {
+  if (p.plantId === "microgreens") {
+    return "Scatter seeds thickly over damp mix, press them in, and keep the pot covered and dark for 2–3 days. Then move it to the light.";
+  }
+  if (p.plantId === "cherry-tomato" || p.plantId === "hot-pepper") {
+    return "Sow 2–3 seeds ¼ inch deep and keep the pot warm (75–80°F; the top of the fridge works). Once they sprout, put them under the grow light and keep the strongest seedling.";
+  }
+  return `Sow a few seeds ¼ inch deep in moist mix and cover the pot loosely with a plastic bag until they sprout. Thin to ${p.spacing}.`;
+}
+
+function buildIndoorTasks(plants: PlannedPlant[], input: PlanInput, ctx: SeasonContext): PlanTask[] {
+  const tasks: PlanTask[] = [];
+  const add = (t: PlanTask) => tasks.push({ ...t, date: maxISO(t.date, ctx.today) });
+  if (plants.length === 0) return tasks;
+
+  const start = minISO(...plants.map((p) => p.schedule.plantOut));
+  const end = maxISO(...plants.map((p) => p.schedule.harvestEnd));
+  const setup = input.indoor;
+
+  add({
+    id: `prep:pots:${start}`,
+    date: addDays(start, -3),
+    title: input.bedsReady ? "Check your pots and mix" : "Get pots, saucers and potting mix",
+    detail: input.bedsReady
+      ? "Make sure every pot has a drainage hole and a saucer, and refresh tired mix with a few handfuls of new potting mix."
+      : "Every pot needs a drainage hole and a saucer underneath. Fill them with fresh indoor potting mix (never garden soil) and water it in.",
+    category: "prep",
+    plantId: null,
+  });
+  if (setup && setup.growLight !== "none") {
+    add({
+      id: `prep:light:${start}`,
+      date: addDays(start, -1),
+      title: setup.growLight === "buy" ? "Set up your grow light" : "Get your grow light ready",
+      detail: "Hang it 6–12 inches above where the leaves will be and plug it into an outlet timer set for 14–16 hours a day. Raise it as the plants grow.",
+      category: "prep",
+      plantId: null,
+    });
+  }
+
+  for (const p of plants) {
+    const plant = getPlant(p.plantId);
+    const rule = plant.indoor;
+    const s = p.schedule;
+    if (rule?.start === "scraps") {
+      add({
+        id: `plant:${p.plantId}:${s.plantOut}`,
+        date: s.plantOut,
+        title: "Regrow green onions from scraps",
+        detail: `Buy ${p.quantity > 8 ? `${Math.ceil(p.quantity / 8)} bunches` : "a bunch"} of green onions and use the tops. Plant ${p.quantity} of the white root ends 1 inch deep and 1 inch apart, and new greens appear within a week.`,
+        category: "plant",
+        plantId: p.plantId,
+      });
+    } else if (p.acquire === "starts") {
+      add({ id: `buy:${p.plantId}:${s.plantOut}`, date: addDays(s.plantOut, -3), ...indoorBuyTask(p), category: "prep", plantId: p.plantId });
+      add({
+        id: `plant:${p.plantId}:${s.plantOut}`,
+        date: s.plantOut,
+        title: `Pot up ${plantsLabel(p.quantity, p.name)}`,
+        detail: `${p.spacing.charAt(0).toUpperCase()}${p.spacing.slice(1)}. Plant them at the depth they were growing, firm the mix, and water until it drains from the bottom.`,
+        category: "plant",
+        plantId: p.plantId,
+      });
+    } else {
+      add({
+        id: `sow:${p.plantId}:${s.plantOut}`,
+        date: s.plantOut,
+        title: p.plantId === "microgreens" ? "Sow your first microgreens" : `Sow ${seedsLabel(p.name)}`,
+        detail: indoorSowDetail(p),
+        category: "plant",
+        plantId: p.plantId,
+      });
+    }
+    for (const d of s.successions) {
+      add({
+        id: `succession:${p.plantId}:${d}`,
+        date: d,
+        title: p.plantId === "microgreens" ? "Sow another round of microgreens" : `Sow a fresh pot of ${p.name.toLowerCase()}`,
+        detail:
+          p.plantId === "microgreens"
+            ? "Clear out the last batch, add fresh mix and sow again so a new crop is ready as you finish the old one."
+            : "Compost the spent plants, refill with fresh mix and sow again so there's always some ready to pick.",
+        category: "plant",
+        plantId: p.plantId,
+      });
+    }
+    if (rule?.growLightOnly && plant.category !== "herb") {
+      const d = addDays(s.harvestStart, -35);
+      add({
+        id: `pollinate:${p.plantId}:${d}`,
+        date: d,
+        title: `Hand-pollinate ${p.name.toLowerCase()} flowers`,
+        detail: "There are no bees indoors. Every couple of days, tap each open flower with a small paintbrush or give the stems a gentle shake.",
+        category: "care",
+        plantId: p.plantId,
+      });
+    }
+    const fruit = plant.category === "fruit" || p.plantId === "cherry-tomato" || p.plantId === "hot-pepper";
+    add({
+      id: `harvest:${p.plantId}:${s.harvestStart}`,
+      date: s.harvestStart,
+      title:
+        p.plantId === "microgreens"
+          ? "First microgreens ready to snip"
+          : plant.category === "herb"
+            ? `Start snipping ${p.name.toLowerCase()}`
+            : fruit
+              ? `${p.name}: first ripe fruit`
+              : `${p.name} ready to pick`,
+      detail: `Harvest from about ${fmtShort(s.harvestStart)}${s.harvestEnd > s.harvestStart ? ` to ${fmtShort(s.harvestEnd)}` : ""}. ${rule?.tip ?? plant.yield}`,
+      category: "harvest",
+      plantId: p.plantId,
+    });
+  }
+
+  // Potting mix runs out of food in about a month.
+  for (let d = nextSaturday(addWeeks(start, 4)); d <= addWeeks(end, -2); d = addWeeks(d, 4)) {
+    add({
+      id: `feed:${d}`,
+      date: d,
+      title: "Feed your indoor plants",
+      detail: "Water with an all-purpose liquid fertilizer mixed at half strength. Herbs taste best when you don't overdo it.",
+      category: "care",
+      plantId: null,
+    });
+  }
+
+  const weeklyStart = nextSaturday(addDays(start, 3));
+  for (let d = weeklyStart; d <= minISO(end, addWeeks(weeklyStart, 30)); d = addWeeks(d, 1)) {
+    add({ id: `weekly:${d}`, ...indoorWeeklyCheck(d, plants, start, input), category: "care", plantId: null, date: d });
+  }
+
+  add({
+    id: `wrapup:indoor:${end}`,
+    date: addDays(end, 3),
+    title: "Refresh your indoor garden",
+    detail: "Cut back or replace tired plants, top up the pots with fresh mix, and plan your next round in Plantr.",
+    category: "prep",
+    plantId: null,
+  });
+
+  return tasks.sort(
+    (a, b) => a.date.localeCompare(b.date) || CATEGORY_ORDER[a.category] - CATEGORY_ORDER[b.category] || a.id.localeCompare(b.id),
+  );
+}
+
+function indoorWeeklyCheck(date: string, plants: PlannedPlant[], start: string, input: PlanInput): { title: string; detail: string } {
+  const growing = plants.filter((p) => p.schedule.plantOut <= date && p.schedule.harvestEnd >= date);
+  const harvesting = growing.filter((p) => p.schedule.harvestStart <= date).map((p) => p.name.toLowerCase());
+  const ids = new Set(growing.map((p) => p.plantId));
+  const items: string[] = [];
+  const early = date <= addWeeks(start, 3);
+  const month = Number(date.slice(5, 7));
+  const winter = month >= 11 || month <= 2;
+
+  if (harvesting.length) items.push(`Snip ${list(harvesting.slice(0, 5))}${harvesting.length > 5 ? " and more" : ""}`);
+  items.push("Water when the top inch of mix is dry, then empty the saucers");
+  if (early && growing.some((p) => p.acquire === "seeds")) items.push("Keep newly sown pots moist until the seeds sprout");
+  items.push("Turn each pot a quarter turn so plants grow straight");
+  items.push(
+    Number(date.slice(8, 10)) % 2 === 0
+      ? "Check under leaves for aphids and spider mites"
+      : "Gnats around the pots? Let the top inch dry out and add a yellow sticky card",
+  );
+  if (ids.has("basil")) items.push("Pinch basil tips and any flower buds");
+  if (winter && input.indoor?.growLight === "none" && indoorLight(input.indoor) < 3) {
+    items.push("Keep leaves off the cold glass on frosty nights");
+  }
+  return {
+    title: harvesting.length ? "Weekly check-in & harvest" : "Weekly windowsill check-in",
     detail: items.join(" · "),
   };
 }

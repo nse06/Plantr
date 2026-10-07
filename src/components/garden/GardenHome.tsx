@@ -7,7 +7,7 @@ import { Archive, ArrowRight, CalendarDays, LayoutGrid, MessageCircle, NotebookP
 import type { GardenPlan, PlanInput } from "@/lib/garden/types";
 import type { JournalEntry } from "@/db/schema";
 import { fmtDay, fmtShort, todayISO } from "@/lib/garden/dates";
-import { isOverdue, progress, seasonOver, upcomingTasks, weekTasks } from "@/lib/garden/progress";
+import { isOverdue, progress, seasonLabel, seasonOver, upcomingTasks, weekTasks } from "@/lib/garden/progress";
 import { PLANTS_BY_ID } from "@/lib/garden/plants";
 import { PlantBadge, plantStage } from "./visuals";
 import { TaskItem, useTaskDone } from "./tasks";
@@ -121,8 +121,8 @@ export function GardenHome({ garden, input, plan, doneTaskIds, journal: initialJ
               </button>
             )}
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              <Chip>Zone {input.climate.zone}</Chip>
-              <Chip tone="neutral">{plan.season === "fall" ? `Fall ${plan.year}` : `${plan.year} season`}</Chip>
+              <Chip>{plan.season === "indoor" ? "🪟 Indoors" : `Zone ${input.climate.zone}`}</Chip>
+              <Chip tone="neutral">{seasonLabel(plan)}</Chip>
               {garden.status === "archived" && <Chip tone="clay">Archived</Chip>}
             </div>
           </div>
@@ -142,14 +142,16 @@ export function GardenHome({ garden, input, plan, doneTaskIds, journal: initialJ
           {over && (
             <Card className="flex flex-col gap-4 bg-gradient-to-br from-sun-50 to-paper p-5 sm:flex-row sm:items-center">
               <span className="text-4xl" aria-hidden>
-                🍂
+                {plan.season === "indoor" ? "🪴" : "🍂"}
               </span>
               <div className="flex-1">
-                <p className="font-display text-xl font-semibold">This season is wrapping up</p>
+                <p className="font-display text-xl font-semibold">
+                  {plan.season === "indoor" ? "Time to refresh your windowsill" : "This season is wrapping up"}
+                </p>
                 <p className="text-sm text-muted">Plan what comes next while it&apos;s fresh. Your notes and harvests below will help.</p>
               </div>
-              <ButtonLink href="/plan/new" variant="primary">
-                Plan next season <ArrowRight className="h-4 w-4" />
+              <ButtonLink href={plan.season === "indoor" ? "/plan/new?space=indoor" : "/plan/new"} variant="primary">
+                {plan.season === "indoor" ? "Plan the next round" : "Plan next season"} <ArrowRight className="h-4 w-4" />
               </ButtonLink>
             </Card>
           )}

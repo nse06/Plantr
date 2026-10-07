@@ -1,6 +1,7 @@
 import type { AreaLayout, PlanInput, PlannedPlant, ShoppingItem } from "./types";
 import { getPlant } from "./plants";
 import { bedGridSize } from "./layout";
+import { isIndoor, potForInches, potInchesForGallons } from "./indoor";
 
 // Everything needed to execute the plan, with rough U.S. retail prices so people can budget.
 
@@ -19,6 +20,7 @@ export function buildShopping(
   input: PlanInput,
   layouts: AreaLayout[],
 ): ShoppingItem[] {
+  if (isIndoor(input)) return buildIndoorShopping(plants, input);
   const items: ShoppingItem[] = [];
 
   // ---- Plants & seeds ----
@@ -262,5 +264,149 @@ export function buildShopping(
     });
   }
 
+  return items;
+}
+
+/** Indoor gardens: small pots with saucers, indoor potting mix, and maybe a grow light. */
+function buildIndoorShopping(plants: PlannedPlant[], input: PlanInput): ShoppingItem[] {
+  const items: ShoppingItem[] = [];
+  for (const p of plants) {
+    const plant = getPlant(p.plantId);
+    const rule = plant.indoor;
+    const variety = p.variety ? `'${p.variety}'` : "";
+    if (rule?.start === "scraps") {
+      items.push({
+        id: `plant:${p.plantId}`,
+        group: "Plants & seeds",
+        name: "Green onions from the grocery store",
+        quantity: p.quantity > 8 ? `${Math.ceil(p.quantity / 8)} bunches` : "1 bunch",
+        note: "Eat the tops, then replant the white root ends.",
+        estCost: 2 * Math.ceil(p.quantity / 8),
+      });
+    } else if (p.plantId === "microgreens") {
+      items.push({
+        id: `plant:${p.plantId}`,
+        group: "Plants & seeds",
+        name: `Microgreen seeds ${variety}`.trim(),
+        quantity: "1 bag (4 oz)",
+        note: "Microgreens use seed by the spoonful. Radish, broccoli and pea shoots are the easiest.",
+        estCost: plant.seedCost,
+      });
+    } else if (p.acquire === "starts") {
+      const count = p.plantId === "basil" ? Math.max(1, Math.ceil(p.quantity / 3)) : p.quantity;
+      items.push({
+        id: `plant:${p.plantId}`,
+        group: "Plants & seeds",
+        name: p.plantId === "basil" ? "Potted basil" : `${p.name} plants ${variety}`.trim(),
+        quantity: `${count}`,
+        note:
+          p.plantId === "basil"
+            ? "A grocery-store pot splits into 3–4 plants."
+            : p.plantId === "strawberry"
+              ? "Day-neutral varieties fruit all year under lights."
+              : "Small potted plants from a garden center or grocery store.",
+        estCost: money(count * plant.startCost),
+      });
+    } else {
+      items.push({
+        id: `plant:${p.plantId}`,
+        group: "Plants & seeds",
+        name: `${p.name} seeds ${variety}`.trim(),
+        quantity: "1 packet",
+        note: p.schedule.successions.length ? "Enough for several sowings." : "Sow right in the pot.",
+        estCost: plant.seedCost,
+      });
+    }
+  }
+
+  const containers = input.areas.filter((a) => a.kind === "containers");
+  if (!input.bedsReady) {
+    for (const c of containers) {
+      const inches = c.potIn ?? potInchesForGallons(c.gallons);
+      items.push({
+        id: `pots:${c.id}`,
+        group: "Supplies",
+        name: `${inches}-inch pots with saucers`,
+        quantity: `${c.count}`,
+        note: "Drainage holes are a must. Plastic or glazed pots dry out slower than terracotta in dry indoor air.",
+        estCost: money(c.count * potForInches(inches).price),
+      });
+    }
+    const gallons = containers.reduce((n, c) => n + c.count * c.gallons, 0);
+    const bags = Math.max(1, Math.ceil(gallons / 2));
+    items.push({
+      id: "soil:potting-mix",
+      group: "Soil & amendments",
+      name: "Indoor potting mix",
+      quantity: `${bags} bag${bags > 1 ? "s" : ""} (8 qt)`,
+      note: "A mix made for containers or indoor plants. Never garden soil: it packs down and breeds gnats.",
+      estCost: money(bags * 7),
+    });
+  }
+  if (input.indoor?.growLight === "buy") {
+    items.push({
+      id: "supply:grow-light",
+      group: "Supplies",
+      name: "Full-spectrum LED grow light",
+      quantity: "1",
+      note: "A clip-on or bar light that covers all your pots, about 20–40 watts of actual power draw.",
+      estCost: 35,
+    });
+    items.push({
+      id: "supply:timer",
+      group: "Supplies",
+      name: "Outlet timer",
+      quantity: "1",
+      note: "Set it for 14–16 hours a day so you never have to remember.",
+      estCost: 10,
+    });
+  }
+  items.push({
+    id: "supply:fertilizer",
+    group: "Soil & amendments",
+    name: "Liquid all-purpose fertilizer",
+    quantity: "1 bottle",
+    note: "Mix it at half strength and feed every 4 weeks.",
+    estCost: 10,
+  });
+  items.push({
+    id: "supply:sticky-traps",
+    group: "Supplies",
+    name: "Yellow sticky traps",
+    quantity: "1 pack",
+    note: "Catch fungus gnats, the most common indoor pest, before they multiply.",
+    estCost: 7,
+  });
+  if (plants.some((p) => p.acquire === "seeds")) {
+    items.push({
+      id: "supply:mister",
+      group: "Supplies",
+      name: "Spray bottle",
+      quantity: "1",
+      note: "Keeps the surface damp while seeds sprout without washing them away.",
+      estCost: 4,
+    });
+  }
+  if (plants.some((p) => getPlant(p.plantId).indoor?.growLightOnly)) {
+    items.push({
+      id: "supply:brush",
+      group: "Supplies",
+      name: "Small, soft paintbrush",
+      quantity: "1",
+      note: "For hand-pollinating flowers, since there are no bees indoors.",
+      estCost: 3,
+    });
+  }
+  const tomatoes = plants.find((p) => p.plantId === "cherry-tomato");
+  if (tomatoes) {
+    items.push({
+      id: "supply:stakes",
+      group: "Supplies",
+      name: "Small plant stakes & soft ties",
+      quantity: `${tomatoes.quantity}`,
+      note: "Even dwarf tomatoes need a little support once they're loaded with fruit.",
+      estCost: money(tomatoes.quantity * 1.5 + 3),
+    });
+  }
   return items;
 }

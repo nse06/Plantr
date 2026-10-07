@@ -17,8 +17,47 @@ export type SunNeed = "full" | "partial";
 export type SunExposure = "full" | "partial" | "shade";
 export type Experience = "new" | "some" | "experienced";
 export type TimeBudget = "minimal" | "moderate" | "plenty";
-export type PlanSeason = "spring" | "fall";
-export type SpaceType = "in-ground" | "raised-bed" | "containers" | "mixed";
+/** "indoor": a year-round windowsill or grow-light garden, scheduled from today instead of frost dates. */
+export type PlanSeason = "spring" | "fall" | "indoor";
+export type SpaceType = "in-ground" | "raised-bed" | "containers" | "mixed" | "indoor";
+
+/** Which way an indoor garden's window faces. South gets the most light in the U.S. */
+export type WindowFacing = "south" | "west" | "east" | "north" | "unsure";
+
+/** Indoor light levels: 1 = a north window, 2 = an east or west window, 3 = a south window or a grow light. */
+export type LightLevel = 1 | 2 | 3;
+
+export interface IndoorSetup {
+  window: WindowFacing;
+  /** "have": already has a grow light; "buy": willing to get one; "none": window light only. */
+  growLight: "have" | "buy" | "none";
+  /** Cats or dogs that might chew on plants. */
+  pets: boolean;
+}
+
+/** How a plant does indoors. Plants without one are outdoor-only. */
+export interface IndoorRule {
+  /** Light it needs to grow well. */
+  light: LightLevel;
+  /** Only worth growing under a grow light (fruiting crops). */
+  growLightOnly?: boolean;
+  /** Smallest workable pot (in gallons) and how many plants go in it. */
+  pot: { gal: number; plants: number };
+  /** Cap on plants per pot, however big the pot. */
+  maxPerPot?: number;
+  /** The easiest way to start it indoors. "scraps": regrow from grocery-store roots. */
+  start: "seeds" | "starts" | "scraps";
+  /** Days from planting (or sowing) to the first harvest. */
+  dtm: number;
+  /** Weeks of harvest before it's spent; omit for plants that keep producing. */
+  harvestWeeks?: number;
+  /** Re-sow every N weeks for a steady supply. */
+  resow?: number;
+  /** Compact varieties that suit pots on a sill. Falls back to the plant's varieties. */
+  varieties?: string[];
+  difficulty?: 1 | 2 | 3;
+  tip: string;
+}
 
 export interface Plant {
   id: string;
@@ -66,6 +105,12 @@ export interface Plant {
   tips: string[];
   seedCost: number;
   startCost: number;
+  /** Indoor growing, for windowsill and grow-light gardens. */
+  indoor?: IndoorRule;
+  /** Only grown indoors (microgreens): never offered for outdoor gardens. */
+  indoorOnly?: boolean;
+  /** Plain-English pet warning when cats or dogs may chew it (based on the ASPCA toxic plant list). */
+  petCaution?: string;
 }
 
 export interface Climate {
@@ -100,6 +145,8 @@ export interface ContainerArea {
   name: string;
   count: number;
   gallons: number;
+  /** Pot diameter in inches, for indoor pots (which are sized in inches, not gallons). */
+  potIn?: number;
 }
 
 export type Area = BedArea | ContainerArea;
@@ -122,6 +169,8 @@ export interface PlanInput {
   season: PlanSeason;
   year: number;
   photo?: PhotoAnalysis | null;
+  /** Window and light details for indoor gardens. */
+  indoor?: IndoorSetup | null;
 }
 
 export interface PhotoAnalysis {
@@ -137,6 +186,8 @@ export interface PhotoAnalysis {
   summary: string;
   observations: string[];
   concerns: string[];
+  /** Indoor photos: usable length of the sill or shelf, in inches. */
+  sillInches?: number | null;
 }
 
 /** What the AI (or the rule-based fallback) decides to plant. */
@@ -177,7 +228,7 @@ export interface ContainerLayout {
   areaId: string;
   kind: "containers";
   name: string;
-  pots: { plantId: string | null; count: number; gallons: number }[];
+  pots: { plantId: string | null; count: number; gallons: number; potIn?: number }[];
 }
 
 export type AreaLayout = BedLayout | ContainerLayout;

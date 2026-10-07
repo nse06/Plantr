@@ -22,14 +22,17 @@ import type {
   Climate,
   Experience,
   Goal,
+  IndoorSetup,
   PhotoAnalysis,
   PlanSeason,
   SpaceType,
   SunExposure,
   TimeBudget,
+  WindowFacing,
 } from "@/lib/garden/types";
 import { GOALS, PLANTS } from "@/lib/garden/plants";
 import { fmtMMDD, todayISO } from "@/lib/garden/dates";
+import { INDOOR_POTS, INDOOR_WEEKS, potForInches } from "@/lib/garden/indoor";
 import type { SeasonOption } from "@/lib/garden/schedule";
 import { Button, Card, Spinner, cx } from "@/components/ui";
 import { prepareImage } from "./image";
@@ -75,6 +78,11 @@ interface WizardState {
   experience: Experience;
   time: TimeBudget;
   seasonKey: string | null;
+  /** Indoor gardens: window direction, grow light, pot size and pets. */
+  window: WindowFacing;
+  growLight: IndoorSetup["growLight"];
+  potInches: number;
+  pets: boolean;
 }
 
 const INITIAL: WizardState = {
@@ -99,7 +107,18 @@ const INITIAL: WizardState = {
   experience: "new",
   time: "moderate",
   seasonKey: null,
+  window: "south",
+  growLight: "none",
+  potInches: 6,
+  pets: false,
 };
+
+const OUTDOOR_DEFAULT: SpaceType = "raised-bed";
+
+/** Switching into indoor mode: a few pots on a sill is the sensible starting point. */
+function toIndoor(s: WizardState): Partial<WizardState> {
+  return { spaceType: "indoor", containerCount: s.spaceType === "indoor" ? s.containerCount : 4, bedsReady: false };
+}
 
 const STORAGE_KEY = "plantr:wizard:v1";
 const STEPS = ["Photo", "Location", "What to grow", "Your space", "About you"];
@@ -116,6 +135,12 @@ function loadSaved(): Partial<WizardState> | null {
 /** Fold a photo analysis into the space answers (unless the user already edited them). */
 function applyAnalysis(s: WizardState, a: PhotoAnalysis): WizardState {
   if (s.spaceTouched || !a.isGardenSpace) return s;
+  if (a.spaceType === "indoor") {
+    const fits = a.containerCount > 0 ? a.containerCount : a.sillInches ? Math.floor(a.sillInches / 7) : 0;
+    return { ...s, ...toIndoor(s), containerCount: fits > 0 ? Math.min(12, fits) : s.spaceType === "indoor" ? s.containerCount : 4 };
+  }
+  // An outdoor-looking photo doesn't override someone who said they're growing indoors.
+  if (s.spaceType === "indoor") return s;
   const w = Math.max(1, Math.min(40, Math.round(Math.min(a.widthFt, a.lengthFt))));
   const l = Math.max(1, Math.min(40, Math.round(Math.max(a.widthFt, a.lengthFt))));
   const count = Math.max(1, Math.min(6, a.bedCount || 1));
@@ -134,7 +159,15 @@ function applyAnalysis(s: WizardState, a: PhotoAnalysis): WizardState {
 // Wizard
 // ---------------------------------------------------------------------------
 
-export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initialGoals: Goal[] }) {
+export function Wizard({
+  aiEnabled,
+  initialGoals,
+  initialIndoor = false,
+}: {
+  aiEnabled: boolean;
+  initialGoals: Goal[];
+  initialIndoor?: boolean;
+}) {
   const router = useRouter();
   const [s, setS] = useState<WizardState>(INITIAL);
   const [hydrated, setHydrated] = useState(false);
@@ -151,11 +184,12 @@ export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initia
         const next = saved ? { ...prev, ...saved } : prev;
         if (next.analysisStatus === "loading") next.analysisStatus = next.analysis ? "done" : "error";
         if (initialGoals.length && !saved) next.goals = initialGoals;
+        if (initialIndoor && !saved) Object.assign(next, toIndoor(next));
         return next;
       });
       setHydrated(true);
     });
-  }, [initialGoals]);
+  }, [initialGoals, initialIndoor]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -173,7 +207,7 @@ export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initia
 
   // ---- Photo analysis runs in the background while the user keeps going ----
   const analyze = useCallback(
-    async (image: string) => {
+    async (image: string, mode: "outdoor" | "indoor") => {
       if (!aiEnabled) {
         update({ analysisStatus: "unavailable" });
         return;
@@ -183,7 +217,7 @@ export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initia
         const res = await fetch("/api/photo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image }),
+          body: JSON.stringify({ image, mode }),
         });
         const data = (await res.json()) as { analysis?: PhotoAnalysis | null; aiEnabled?: boolean; error?: string };
         if (!res.ok || !data.analysis) {
@@ -202,24 +236,31 @@ export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initia
   // ---- Submit ----
   async function submit() {
     if (!s.climateInfo) return go(1);
-    const option = s.climateInfo.seasons.find((o) => `${o.season}-${o.year}` === s.seasonKey) ?? s.climateInfo.seasons[0];
+    const indoor = s.spaceType === "indoor";
+    const today = todayISO();
+    const option = indoor
+      ? { season: "indoor" as const, year: Number(today.slice(0, 4)) }
+      : (s.climateInfo.seasons.find((o) => `${o.season}-${o.year}` === s.seasonKey) ?? s.climateInfo.seasons[0]);
     if (!option) return;
     setGenerating(true);
     setSubmitError(null);
 
-    const areas = [
-      ...(s.spaceType === "containers"
-        ? []
-        : s.beds.map((b) => ({
-            kind: "bed" as const,
-            widthFt: b.widthFt,
-            lengthFt: b.lengthFt,
-            raised: s.spaceType === "raised-bed" ? true : s.spaceType === "in-ground" ? false : b.raised,
-          }))),
-      ...(s.spaceType === "containers" || s.spaceType === "mixed"
-        ? [{ kind: "containers" as const, count: s.containerCount, gallons: s.containerGallons }]
-        : []),
-    ];
+    const pot = potForInches(s.potInches);
+    const areas = indoor
+      ? [{ kind: "containers" as const, count: s.containerCount, gallons: pot.gallons, potIn: pot.inches }]
+      : [
+          ...(s.spaceType === "containers"
+            ? []
+            : s.beds.map((b) => ({
+                kind: "bed" as const,
+                widthFt: b.widthFt,
+                lengthFt: b.lengthFt,
+                raised: s.spaceType === "raised-bed" ? true : s.spaceType === "in-ground" ? false : b.raised,
+              }))),
+          ...(s.spaceType === "containers" || s.spaceType === "mixed"
+            ? [{ kind: "containers" as const, count: s.containerCount, gallons: s.containerGallons }]
+            : []),
+        ];
 
     try {
       const res = await fetch("/api/plans", {
@@ -240,9 +281,10 @@ export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initia
           time: s.time,
           season: option.season as PlanSeason,
           year: option.year,
+          indoor: indoor ? { window: s.window, growLight: s.growLight, pets: s.pets } : null,
           photo: s.analysis,
           photoThumb: s.thumb,
-          today: todayISO(),
+          today,
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -260,6 +302,7 @@ export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initia
   if (generating || submitError) {
     return (
       <Generating
+        indoor={s.spaceType === "indoor"}
         zip={s.zip}
         zone={s.climateInfo?.climate.zone ?? ""}
         error={submitError}
@@ -309,7 +352,7 @@ export function Wizard({ aiEnabled, initialGoals }: { aiEnabled: boolean; initia
 }
 
 function spaceValid(s: WizardState): boolean {
-  if (s.spaceType === "containers") return s.containerCount > 0;
+  if (s.spaceType === "containers" || s.spaceType === "indoor") return s.containerCount > 0;
   return s.beds.length > 0 && s.beds.every((b) => b.widthFt >= 1 && b.lengthFt >= 1);
 }
 
@@ -359,9 +402,10 @@ function PhotoStep({
   analyze,
   aiEnabled,
   next,
-}: StepProps & { analyze: (image: string) => void; aiEnabled: boolean; next: () => void }) {
+}: StepProps & { analyze: (image: string, mode: "outdoor" | "indoor") => void; aiEnabled: boolean; next: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const indoor = s.spaceType === "indoor";
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -370,7 +414,7 @@ function PhotoStep({
     try {
       const { full, thumb } = await prepareImage(file);
       update({ thumb, analysis: null, spaceTouched: false });
-      void analyze(full);
+      void analyze(full, indoor ? "indoor" : "outdoor");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "We couldn't read that photo.");
     } finally {
@@ -380,16 +424,23 @@ function PhotoStep({
 
   return (
     <div>
-      <StepHeader title="Show us your space">
-        Snap a photo of the yard, bed, patio or balcony you want to plant.{" "}
-        {aiEnabled ? "We'll estimate its size and how much sun it gets." : "It'll appear on your plan."}
-      </StepHeader>
+      {indoor ? (
+        <StepHeader title="Show us your window">
+          Snap the windowsill, shelf or table where your plants will live.{" "}
+          {aiEnabled ? "We'll estimate how many pots fit and how bright it looks." : "It'll appear on your plan."}
+        </StepHeader>
+      ) : (
+        <StepHeader title="Show us your space">
+          Snap a photo of the yard, bed, patio or balcony you want to plant.{" "}
+          {aiEnabled ? "We'll estimate its size and how much sun it gets." : "It'll appear on your plan."}
+        </StepHeader>
+      )}
 
       {s.thumb ? (
         <Card className="overflow-hidden">
           <div className="relative">
             {/* eslint-disable-next-line @next/next/no-img-element -- local data URL preview */}
-            <img src={s.thumb} alt="Your garden space" className="aspect-[4/3] w-full object-cover" />
+            <img src={s.thumb} alt={indoor ? "Your window" : "Your garden space"} className="aspect-[4/3] w-full object-cover" />
             <div className="absolute left-3 top-3">
               {s.analysisStatus === "loading" && (
                 <span className="inline-flex items-center gap-2 rounded-full bg-ink/80 px-3 py-1.5 text-sm font-semibold text-white backdrop-blur">
@@ -432,7 +483,7 @@ function PhotoStep({
               {busy ? <Spinner className="h-7 w-7" /> : <Camera className="h-7 w-7" />}
             </span>
             <span className="font-display text-xl font-semibold">Take a photo</span>
-            <span className="text-sm text-muted">Stand back so the whole area is in the frame</span>
+            <span className="text-sm text-muted">{indoor ? "Get the whole window and sill in the frame" : "Stand back so the whole area is in the frame"}</span>
             <input type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} disabled={busy} />
           </label>
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-full border border-line-strong bg-paper px-5 py-3 font-semibold transition-colors hover:bg-leaf-50">
@@ -442,16 +493,26 @@ function PhotoStep({
           </label>
           {err && <p className="rounded-xl bg-clay-50 px-4 py-3 text-sm text-clay-700">{err}</p>}
           <ul className="grid gap-2 pt-2 text-sm text-muted sm:grid-cols-3">
-            {["Daylight works best", "Include a fence, door or bed for scale", "Your photo stays private"].map((t) => (
+            {(indoor
+              ? ["Daylight works best", "Open the blinds", "Your photo stays private"]
+              : ["Daylight works best", "Include a fence, door or bed for scale", "Your photo stays private"]
+            ).map((t) => (
               <li key={t} className="flex items-center gap-2">
                 <Check className="h-4 w-4 text-leaf-500" />
                 {t}
               </li>
             ))}
           </ul>
-          <div className="pt-4 text-center">
+          <div className="flex flex-col items-center gap-3 pt-4 text-center">
             <button type="button" onClick={next} className="text-[15px] font-semibold text-leaf-700 underline-offset-4 hover:underline">
               No photo? Describe your space instead
+            </button>
+            <button
+              type="button"
+              onClick={() => update(indoor ? { spaceType: OUTDOOR_DEFAULT } : toIndoor(s))}
+              className="inline-flex items-center gap-2 rounded-full bg-leaf-50 px-4 py-2 text-sm font-semibold text-leaf-700 hover:bg-leaf-100"
+            >
+              {indoor ? "🌳 Growing outside instead?" : "🪟 Growing indoors on a windowsill?"}
             </button>
           </div>
         </div>
@@ -464,17 +525,34 @@ function AnalysisSummary({ a }: { a: PhotoAnalysis }) {
   if (!a.isGardenSpace) {
     return <p className="text-[15px] text-muted">{a.summary} You can describe your space in a couple of steps.</p>;
   }
-  const type = { "in-ground": "In-ground space", "raised-bed": "Raised beds", containers: "Container space", mixed: "Beds + containers" }[a.spaceType];
-  const sun = { full: "full sun", partial: "partial sun", shade: "mostly shade" }[a.sun];
+  const type = {
+    "in-ground": "In-ground space",
+    "raised-bed": "Raised beds",
+    containers: "Container space",
+    mixed: "Beds + containers",
+    indoor: "Windowsill",
+  }[a.spaceType];
+  const indoor = a.spaceType === "indoor";
+  const sun = indoor
+    ? { full: "bright light", partial: "moderate light", shade: "low light" }[a.sun]
+    : { full: "full sun", partial: "partial sun", shade: "mostly shade" }[a.sun];
   return (
     <div>
       <p className="text-[15px] leading-relaxed">{a.summary}</p>
       <div className="mt-3 flex flex-wrap gap-1.5">
         <span className="rounded-full bg-leaf-50 px-3 py-1 text-sm font-semibold text-leaf-700">{type}</span>
-        {a.spaceType !== "containers" && (
-          <span className="rounded-full bg-leaf-50 px-3 py-1 text-sm font-semibold text-leaf-700">
-            ~{a.widthFt} × {a.lengthFt} ft{a.bedCount > 1 ? ` × ${a.bedCount}` : ""}
-          </span>
+        {indoor ? (
+          a.containerCount > 0 && (
+            <span className="rounded-full bg-leaf-50 px-3 py-1 text-sm font-semibold text-leaf-700">
+              Fits ~{a.containerCount} pots{a.sillInches ? ` on ~${a.sillInches} in` : ""}
+            </span>
+          )
+        ) : (
+          a.spaceType !== "containers" && (
+            <span className="rounded-full bg-leaf-50 px-3 py-1 text-sm font-semibold text-leaf-700">
+              ~{a.widthFt} × {a.lengthFt} ft{a.bedCount > 1 ? ` × ${a.bedCount}` : ""}
+            </span>
+          )
         )}
         <span className="rounded-full bg-sun-50 px-3 py-1 text-sm font-semibold text-sun-600">Looks like {sun}</span>
       </div>
@@ -531,7 +609,13 @@ function LocationStep({ s, update }: StepProps) {
 
   return (
     <div>
-      <StepHeader title="Where's your garden?">Your ZIP code tells us your growing zone and frost dates, so every date in your plan fits your climate.</StepHeader>
+      {s.spaceType === "indoor" ? (
+        <StepHeader title="Where are you?">
+          Indoors, frost dates don&apos;t matter much. Your ZIP code helps with climate questions later, like when your herbs can summer outside.
+        </StepHeader>
+      ) : (
+        <StepHeader title="Where's your garden?">Your ZIP code tells us your growing zone and frost dates, so every date in your plan fits your climate.</StepHeader>
+      )}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -592,7 +676,7 @@ function LocationStep({ s, update }: StepProps) {
               ? `From NOAA climate normals for ${c.station.name}${c.station.distanceMi > 1 ? `, ${c.station.distanceMi} mi away` : ""}.`
               : "Typical dates for your hardiness zone."}
           </p>
-          {!c.frostFree && (
+          {!c.frostFree && s.spaceType !== "indoor" && (
             <div className="border-t border-line px-5 py-3">
               {editFrost ? (
                 <FrostEditor
@@ -675,6 +759,20 @@ const POPULAR = [
   "carrot",
   "kale",
 ];
+const POPULAR_INDOOR = [
+  "basil",
+  "parsley",
+  "chives",
+  "mint",
+  "cilantro",
+  "lettuce",
+  "microgreens",
+  "scallions",
+  "arugula",
+  "thyme",
+  "cherry-tomato",
+  "strawberry",
+];
 const CATEGORIES = [
   { id: "all", label: "All" },
   { id: "vegetable", label: "Vegetables" },
@@ -683,24 +781,44 @@ const CATEGORIES = [
   { id: "fruit", label: "Fruit" },
 ] as const;
 
+/** Goals that make sense on a windowsill, with indoor examples. */
+const INDOOR_GOAL_BLURBS: Partial<Record<Goal, string>> = {
+  herbs: "Basil, parsley, chives & more",
+  salad: "Lettuce, arugula, microgreens",
+  "cooking-greens": "Baby kale, spinach, microgreens",
+  kids: "Microgreens, green onions, berries",
+  pizza: "Basil and oregano",
+  salsa: "Cilantro, green onions, peppers",
+  "low-maintenance": "Forgiving, hard-to-kill picks",
+};
+
 function GrowStep({ s, update }: StepProps) {
+  const indoor = s.spaceType === "indoor";
+  const popular = indoor ? POPULAR_INDOOR : POPULAR;
   const [query, setQuery] = useState("");
   const [cat, setCat] = useState<(typeof CATEGORIES)[number]["id"]>("all");
-  const [showAll, setShowAll] = useState(s.wants.some((w) => !POPULAR.includes(w)));
+  const [showAll, setShowAll] = useState(s.wants.some((w) => !popular.includes(w)));
 
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const catalog = useMemo(() => PLANTS.filter((p) => (indoor ? Boolean(p.indoor) : !p.indoorOnly)), [indoor]);
   const plants = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = PLANTS.filter((p) => (cat === "all" || p.category === cat) && (!q || p.name.toLowerCase().includes(q)));
-    if (!showAll && !q && cat === "all") list = POPULAR.map((id) => PLANTS.find((p) => p.id === id)!).filter(Boolean);
+    let list = catalog.filter((p) => (cat === "all" || p.category === cat) && (!q || p.name.toLowerCase().includes(q)));
+    if (!showAll && !q && cat === "all") list = popular.map((id) => catalog.find((p) => p.id === id)!).filter(Boolean);
     return list;
-  }, [query, cat, showAll]);
+  }, [query, cat, showAll, catalog, popular]);
+  const goals = indoor
+    ? GOALS.filter((g) => INDOOR_GOAL_BLURBS[g.id]).map((g) => ({ ...g, blurb: INDOOR_GOAL_BLURBS[g.id]! }))
+    : GOALS;
+  const categories = indoor ? CATEGORIES.filter((c) => c.id !== "flower") : CATEGORIES;
 
   return (
     <div>
-      <StepHeader title="What do you want to grow?">Pick any goals that sound good. We&apos;ll choose plants that fit them, your climate and your space.</StepHeader>
+      <StepHeader title="What do you want to grow?">
+        Pick any goals that sound good. We&apos;ll choose plants that fit them, your {indoor ? "light" : "climate"} and your space.
+      </StepHeader>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-        {GOALS.map((g) => {
+        {goals.map((g) => {
           const on = s.goals.includes(g.id);
           return (
             <button
@@ -738,7 +856,7 @@ function GrowStep({ s, update }: StepProps) {
           />
         </label>
         <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -780,7 +898,7 @@ function GrowStep({ s, update }: StepProps) {
       </div>
       {!showAll && !query && cat === "all" && (
         <button type="button" onClick={() => setShowAll(true)} className="mt-3 text-sm font-semibold text-leaf-700 hover:underline">
-          Show all {PLANTS.length} plants
+          Show all {catalog.length} plants
         </button>
       )}
 
@@ -790,7 +908,11 @@ function GrowStep({ s, update }: StepProps) {
           value={s.notes}
           onChange={(e) => update({ notes: e.target.value.slice(0, 1000) })}
           rows={3}
-          placeholder="e.g. We love spicy food, the kids want pumpkins, deer visit the yard…"
+          placeholder={
+            indoor
+              ? "e.g. We cook a lot of Italian food, the cat likes to nibble plants…"
+              : "e.g. We love spicy food, the kids want pumpkins, deer visit the yard…"
+          }
           className="mt-2 w-full rounded-2xl border border-line-strong bg-paper p-4 text-[15px] focus:border-leaf-500 focus:outline-none"
         />
       </label>
@@ -807,10 +929,26 @@ const SPACE_TYPES: { id: SpaceType; label: string; emoji: string; blurb: string 
   { id: "in-ground", label: "In the ground", emoji: "🌱", blurb: "Lawn or soil I can dig" },
   { id: "containers", label: "Containers", emoji: "🏺", blurb: "Pots on a patio or balcony" },
   { id: "mixed", label: "A mix", emoji: "🧺", blurb: "Some beds plus some pots" },
+  { id: "indoor", label: "Indoors", emoji: "🪟", blurb: "A windowsill or grow light" },
+];
+
+const WINDOWS: { id: WindowFacing; emoji: string; title: string; blurb: string }[] = [
+  { id: "south", emoji: "☀️", title: "South", blurb: "Brightest" },
+  { id: "west", emoji: "🌇", title: "West", blurb: "Strong afternoon sun" },
+  { id: "east", emoji: "🌅", title: "East", blurb: "Gentle morning sun" },
+  { id: "north", emoji: "☁️", title: "North", blurb: "Bright shade" },
+  { id: "unsure", emoji: "🧭", title: "Not sure", blurb: "We'll play it safe" },
+];
+
+const GROW_LIGHTS: { id: IndoorSetup["growLight"]; emoji: string; title: string; blurb: string }[] = [
+  { id: "have", emoji: "💡", title: "I have one", blurb: "Any LED grow light" },
+  { id: "buy", emoji: "🛒", title: "Happy to buy one", blurb: "About $45 with a timer" },
+  { id: "none", emoji: "🪟", title: "Window only", blurb: "No grow light" },
 ];
 
 function SpaceStep({ s, update }: StepProps) {
   const set = (patch: Partial<WizardState>) => update({ ...patch, spaceTouched: true });
+  if (s.spaceType === "indoor") return <IndoorSpace s={s} set={set} />;
   const bedSqFt = s.spaceType === "containers" ? 0 : s.beds.reduce((n, b) => n + b.widthFt * b.lengthFt, 0);
   const showBeds = s.spaceType !== "containers";
   const showPots = s.spaceType === "containers" || s.spaceType === "mixed";
@@ -842,20 +980,7 @@ function SpaceStep({ s, update }: StepProps) {
         </div>
       )}
 
-      <Section title="What kind of space?">
-        <div className="grid grid-cols-2 gap-2.5">
-          {SPACE_TYPES.map((t) => (
-            <OptionCard
-              key={t.id}
-              on={s.spaceType === t.id}
-              onClick={() => set({ spaceType: t.id, bedsReady: t.id === "raised-bed" ? s.bedsReady : false })}
-              emoji={t.emoji}
-              title={t.label}
-              blurb={t.blurb}
-            />
-          ))}
-        </div>
-      </Section>
+      <SpaceTypePicker s={s} set={set} />
 
       {showBeds && (
         <Section title={s.spaceType === "in-ground" ? "Planting area" : "Your beds"} hint={`About ${bedSqFt} sq ft of growing space`}>
@@ -979,6 +1104,128 @@ function SpaceStep({ s, update }: StepProps) {
   );
 }
 
+function SpaceTypePicker({ s, set }: { s: WizardState; set: (patch: Partial<WizardState>) => void }) {
+  return (
+    <Section title="What kind of space?">
+      <div className="grid grid-cols-2 gap-2.5">
+        {SPACE_TYPES.map((t) => (
+          <OptionCard
+            key={t.id}
+            on={s.spaceType === t.id}
+            onClick={() =>
+              set(
+                t.id === "indoor"
+                  ? toIndoor(s)
+                  : {
+                      spaceType: t.id,
+                      bedsReady: t.id === "raised-bed" ? s.bedsReady : false,
+                      // Indoor pot counts don't carry over to a patio.
+                      containerCount: s.spaceType === "indoor" ? INITIAL.containerCount : s.containerCount,
+                    },
+              )
+            }
+            emoji={t.emoji}
+            title={t.label}
+            blurb={t.blurb}
+          />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+function IndoorSpace({ s, set }: { s: WizardState; set: (patch: Partial<WizardState>) => void }) {
+  const photo = s.analysis?.isGardenSpace && s.analysis.spaceType === "indoor" ? s.analysis : null;
+  return (
+    <div>
+      <StepHeader title="Tell us about your window">Light is what matters most indoors. Rough answers are fine.</StepHeader>
+
+      {photo && (
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-leaf-200 bg-leaf-50 p-3.5">
+          {s.thumb && (
+            // eslint-disable-next-line @next/next/no-img-element -- local data URL preview
+            <img src={s.thumb} alt="" className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+          )}
+          <div className="text-sm">
+            <p className="flex items-center gap-1.5 font-semibold text-leaf-700">
+              <Sparkles className="h-4 w-4" /> Pre-filled from your photo
+            </p>
+            <p className="text-muted">We can&apos;t tell which way a window faces from a photo, so pick that below.</p>
+            {photo.concerns.length > 0 && (
+              <p className="mt-1 flex gap-1.5 text-sun-600">
+                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                {photo.concerns[0]}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <SpaceTypePicker s={s} set={set} />
+
+      <Section title="Which way does the window face?" hint="Stand at the window facing out and check your phone's compass app.">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {WINDOWS.map((w) => (
+            <OptionCard key={w.id} on={s.window === w.id} onClick={() => set({ window: w.id })} emoji={w.emoji} title={w.title} blurb={w.blurb} />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="A grow light?" hint="An inexpensive LED light lets you grow almost anything indoors, even tomatoes and strawberries.">
+        <div className="grid grid-cols-3 gap-2.5">
+          {GROW_LIGHTS.map((g) => (
+            <OptionCard key={g.id} on={s.growLight === g.id} onClick={() => set({ growLight: g.id })} emoji={g.emoji} title={g.title} blurb={g.blurb} />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Pots" hint="A 6-inch pot holds one herb plant. Go 8 inches or bigger for larger plants.">
+        <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-paper p-3">
+          <Stepper label="How many" value={s.containerCount} min={1} max={12} onChange={(v) => set({ containerCount: v })} />
+          <div>
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-faint">Size each</p>
+            <div className="flex flex-wrap gap-1.5">
+              {INDOOR_POTS.map((p) => (
+                <button
+                  key={p.inches}
+                  type="button"
+                  onClick={() => set({ potInches: p.inches })}
+                  className={cx(
+                    "h-9 rounded-full px-3 text-sm font-semibold",
+                    s.potInches === p.inches ? "bg-leaf-600 text-white" : "border border-line bg-paper text-muted",
+                  )}
+                >
+                  {p.inches} in
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {photo?.sillInches ? (
+          <p className="mt-2 text-sm text-muted">
+            Your sill looks about {photo.sillInches} inches long, enough for about {Math.max(1, Math.floor(photo.sillInches / (s.potInches + 1)))} pots
+            this size in a row.
+          </p>
+        ) : null}
+      </Section>
+
+      <Section title="Do you have pots and potting mix?">
+        <div className="grid grid-cols-2 gap-2.5">
+          <OptionCard on={s.bedsReady} onClick={() => set({ bedsReady: true })} emoji="✅" title="I have pots & mix" blurb="Just needs plants" />
+          <OptionCard on={!s.bedsReady} onClick={() => set({ bedsReady: false })} emoji="🛍️" title="Need pots & mix" blurb="Add them to my list" />
+        </div>
+      </Section>
+
+      <Section title="Any cats or dogs?" hint="Some herbs, like chives and mint, can make pets sick if they chew them.">
+        <div className="grid grid-cols-2 gap-2.5">
+          <OptionCard on={s.pets} onClick={() => set({ pets: true })} emoji="🐈" title="Yes" blurb="Keep it pet-safe" />
+          <OptionCard on={!s.pets} onClick={() => set({ pets: false })} emoji="🌿" title="No pets" blurb="Anything goes" />
+        </div>
+      </Section>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Step 5: about you
 // ---------------------------------------------------------------------------
@@ -1022,7 +1269,22 @@ function AboutStep({ s, update }: StepProps) {
         </div>
       </Section>
 
-      {seasons.length > 0 && (
+      {s.spaceType === "indoor" ? (
+        <Section title="When do you want to start?">
+          <div className="flex items-center gap-3 rounded-2xl border border-leaf-500 bg-leaf-50 p-4 ring-2 ring-leaf-500/30">
+            <span className="text-2xl" aria-hidden>
+              🪟
+            </span>
+            <span className="flex-1">
+              <span className="block font-semibold">Start now</span>
+              <span className="block text-sm text-muted">
+                Indoor gardens grow year-round. Your plan starts this week and covers the next {Math.round(INDOOR_WEEKS / 4.3)} months.
+              </span>
+            </span>
+            <CircleCheck className="h-5 w-5 text-leaf-600" />
+          </div>
+        </Section>
+      ) : seasons.length > 0 && (
         <Section title="When do you want to plant?">
           <div className="space-y-2.5">
             {seasons.map((o) => {
@@ -1166,12 +1428,14 @@ function Stepper({ label, value, min, max, onChange }: { label: string; value: n
 // ---------------------------------------------------------------------------
 
 function Generating({
+  indoor,
   zip,
   zone,
   error,
   onRetry,
   onBack,
 }: {
+  indoor: boolean;
   zip: string;
   zone: string;
   error: string | null;
@@ -1179,16 +1443,27 @@ function Generating({
   onBack: () => void;
 }) {
   const messages = useMemo(
-    () => [
-      `Checking frost dates for ${zip}…`,
-      `Finding plants that thrive in zone ${zone}…`,
-      "Choosing the right varieties for your space…",
-      "Laying out your beds with tall plants to the north…",
-      "Timing every planting to your frost dates…",
-      "Writing your shopping list…",
-      "Adding the finishing touches…",
-    ],
-    [zip, zone],
+    () =>
+      indoor
+        ? [
+            "Checking the light at your window…",
+            "Finding plants that thrive indoors…",
+            "Choosing compact varieties for your pots…",
+            "Lining up pots along your sill…",
+            "Scheduling sowing and re-sowing…",
+            "Writing your shopping list…",
+            "Adding the finishing touches…",
+          ]
+        : [
+            `Checking frost dates for ${zip}…`,
+            `Finding plants that thrive in zone ${zone}…`,
+            "Choosing the right varieties for your space…",
+            "Laying out your beds with tall plants to the north…",
+            "Timing every planting to your frost dates…",
+            "Writing your shopping list…",
+            "Adding the finishing touches…",
+          ],
+    [indoor, zip, zone],
   );
   const [i, setI] = useState(0);
   useEffect(() => {

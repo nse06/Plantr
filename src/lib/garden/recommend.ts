@@ -3,6 +3,17 @@ import { GOALS, PLANTS, PLANTS_BY_ID } from "./plants";
 import { computeSchedule, type SeasonContext } from "./schedule";
 import { cellsNeeded, maxPotGallons, plantableSqFt, plantsPerPot, potCount } from "./layout";
 import { seasonLengthDays } from "./climate";
+import {
+  indoorCheck,
+  indoorDefaultQuantity,
+  indoorDifficulty,
+  indoorLight,
+  indoorSummary,
+  indoorTips,
+  indoorVarieties,
+  isIndoor,
+  plantsPerIndoorPot,
+} from "./indoor";
 
 export interface Candidate {
   plant: Plant;
@@ -18,6 +29,7 @@ export interface CatalogEvaluation {
 
 /** Check every catalog plant against season timing, sun and available space. */
 export function evaluateCatalog(input: PlanInput, ctx: SeasonContext): CatalogEvaluation {
+  if (isIndoor(input)) return evaluateIndoor(input, ctx);
   const feasible: Candidate[] = [];
   const infeasible: { plant: Plant; reason: string }[] = [];
   const hasBeds = input.areas.some((a) => a.kind === "bed");
@@ -25,6 +37,10 @@ export function evaluateCatalog(input: PlanInput, ctx: SeasonContext): CatalogEv
 
   for (const plant of PLANTS) {
     const warnings: string[] = [];
+    if (plant.indoorOnly) {
+      infeasible.push({ plant, reason: `${plant.name} are grown indoors. Plan an indoor garden to grow them.` });
+      continue;
+    }
     if (input.sun === "shade" && plant.sun === "full") {
       infeasible.push({ plant, reason: `${plant.name} needs at least 6 hours of direct sun.` });
       continue;
@@ -61,10 +77,52 @@ export function evaluateCatalog(input: PlanInput, ctx: SeasonContext): CatalogEv
   return { feasible, infeasible };
 }
 
+/** Indoor gardens: light and pot size decide what works, and every plant can start now. */
+function evaluateIndoor(input: PlanInput, ctx: SeasonContext): CatalogEvaluation {
+  const feasible: Candidate[] = [];
+  const infeasible: { plant: Plant; reason: string }[] = [];
+  const maxGal = maxPotGallons(input.areas);
+  const wanted = new Set([...input.wants, ...plantsFromNotes(input.notes).named]);
+  for (const plant of PLANTS) {
+    const check = indoorCheck(plant, input, maxGal, ctx.today, wanted.has(plant.id));
+    if (!check.ok) {
+      infeasible.push({ plant, reason: check.reason });
+      continue;
+    }
+    const result = computeSchedule(plant, ctx);
+    if (!result.ok) {
+      infeasible.push({ plant, reason: result.reason });
+      continue;
+    }
+    feasible.push({
+      plant,
+      schedule: { ...result.schedule, warnings: check.warnings },
+      mustBuyStarts: false,
+      warnings: check.warnings,
+    });
+  }
+  return { feasible, infeasible };
+}
+
+/** The variety we suggest when nobody picked one. */
+export function defaultVariety(plant: Plant, input: PlanInput): string {
+  if (!isIndoor(input)) return plant.varieties[0] ?? "";
+  // Regrown from grocery-store scraps: there's no variety to choose.
+  return plant.indoor?.start === "scraps" ? "" : (indoorVarieties(plant)[0] ?? "");
+}
+
+/** Plants per pot for this garden (indoor pots follow the indoor rules). */
+function perPot(plant: Plant, input: PlanInput): number {
+  const gal = maxPotGallons(input.areas);
+  return isIndoor(input) ? plantsPerIndoorPot(plant, gal) : plantsPerPot(plant, gal);
+}
+
 const MIN_QTY: Record<string, number> = { "sweet-corn": 16 };
 
 /** A sensible starting quantity for a household. */
-export function defaultQuantity(plant: Plant, household: number): number {
+export function defaultQuantity(plant: Plant, input: PlanInput): number {
+  if (isIndoor(input)) return indoorDefaultQuantity(plant, input, maxPotGallons(input.areas));
+  const household = input.household;
   const raw = plant.perPerson * Math.max(1, household);
   let qty: number;
   if (plant.perSqFt >= 1) {
@@ -85,14 +143,14 @@ export function minimumQuantity(plant: Plant): number {
 export function spaceUnits(plant: Plant, qty: number, input: PlanInput): number {
   const hasBeds = input.areas.some((a) => a.kind === "bed");
   if (hasBeds) return cellsNeeded(plant, qty);
-  const per = plantsPerPot(plant, maxPotGallons(input.areas));
+  const per = perPot(plant, input);
   return per > 0 ? Math.ceil(qty / per) : Infinity;
 }
 
 /** In container-only gardens, plant in whole pots (no pot with a single lonely spinach). */
 export function roundToPots(plant: Plant, qty: number, input: PlanInput): number {
   if (input.areas.some((a) => a.kind === "bed")) return qty;
-  const per = plantsPerPot(plant, maxPotGallons(input.areas));
+  const per = perPot(plant, input);
   if (per <= 1) return qty;
   return Math.max(per, Math.round(qty / per) * per);
 }
@@ -127,23 +185,28 @@ function namePattern(name: string): RegExp {
   return new RegExp(`\\b${plural}\\b`, "i");
 }
 
+/** True when the text mentions the plant by any of its common names ("green onions", "chard"). */
+export function mentionsPlant(text: string, p: Plant): boolean {
+  const names = [p.name.toLowerCase(), p.id.replace(/-/g, " ")];
+  if (p.id === "scallions") names.push("scallion", "green onion");
+  if (p.id === "snap-peas") names.push("peas", "pea");
+  if (p.id === "sweet-corn") names.push("corn");
+  if (p.id === "swiss-chard") names.push("chard");
+  if (p.id === "hot-pepper") names.push("jalapeño", "jalapeno");
+  const lower = text.toLowerCase();
+  return names.some((n) => namePattern(n).test(lower));
+}
+
 /** Plant ids mentioned by name or implied by keywords in the user's free-text notes. */
 export function plantsFromNotes(notes: string): { named: string[]; implied: string[] } {
-  const named: string[] = [];
-  const text = notes.toLowerCase();
-  for (const p of PLANTS) {
-    const names = [p.name.toLowerCase(), p.id.replace(/-/g, " ")];
-    if (p.id === "scallions") names.push("scallion", "green onion");
-    if (p.id === "snap-peas") names.push("peas", "pea");
-    if (p.id === "sweet-corn") names.push("corn");
-    if (p.id === "swiss-chard") names.push("chard");
-    if (p.id === "hot-pepper") names.push("jalapeño", "jalapeno");
-    if (names.some((n) => namePattern(n).test(text))) named.push(p.id);
-  }
+  const named = PLANTS.filter((p) => mentionsPlant(notes, p)).map((p) => p.id);
   const implied = new Set<string>();
   for (const [re, ids] of KEYWORDS) if (re.test(notes)) ids.forEach((id) => implied.add(id));
   return { named, implied: [...implied].filter((id) => !named.includes(id)) };
 }
+
+/** Forgiving indoor crops for a first windowsill garden. */
+const INDOOR_FAVORITES = new Set(["basil", "parsley", "chives", "mint", "lettuce", "microgreens", "scallions"]);
 
 const BEGINNER_FAVORITES = new Set([
   "cherry-tomato",
@@ -178,19 +241,28 @@ function score(c: Candidate, input: PlanInput, wanted: Set<string>, implied: Set
   if (implied.has(p.id)) s += 18;
   const hits = p.goals.filter((g) => input.goals.includes(g)).length;
   s += hits * 12;
-  if (input.goals.length === 0 && wanted.size === 0 && BEGINNER_FAVORITES.has(p.id)) s += 10;
-  if (input.experience === "new") s -= p.difficulty === 3 ? 25 : p.difficulty === 2 ? 6 : 0;
-  if (input.experience === "some" && p.difficulty === 3) s -= 8;
+  const indoor = isIndoor(input);
+  const favorites = indoor ? INDOOR_FAVORITES : BEGINNER_FAVORITES;
+  if (input.goals.length === 0 && wanted.size === 0 && favorites.has(p.id)) s += 10;
+  const difficulty = indoor ? indoorDifficulty(p) : p.difficulty;
+  if (input.experience === "new") s -= difficulty === 3 ? 25 : difficulty === 2 ? 6 : 0;
+  if (input.experience === "some" && difficulty === 3) s -= 8;
   if (input.time === "minimal") {
     if (p.goals.includes("low-maintenance")) s += 6;
-    if (p.difficulty >= 2) s -= 6;
+    if (difficulty >= 2) s -= 6;
     if (p.succession) s -= 2;
   }
-  if (input.sun === "partial") s += p.sun === "partial" ? 5 : -14;
-  if (input.sun === "shade") s += p.category === "herb" || p.sun === "partial" ? 4 : -10;
+  if (indoor) {
+    // Plants with light to spare do better than ones right at the edge.
+    if (p.indoor && p.indoor.light < indoorLight(input.indoor)) s += 3;
+    if (input.indoor?.pets && p.petCaution && !wanted.has(p.id)) s -= 30;
+  } else {
+    if (input.sun === "partial") s += p.sun === "partial" ? 5 : -14;
+    if (input.sun === "shade") s += p.category === "herb" || p.sun === "partial" ? 4 : -10;
+  }
   // Space hogs need to earn their place in small gardens.
   const cap = capacityUnits(input);
-  const units = spaceUnits(p, defaultQuantity(p, input.household), input);
+  const units = spaceUnits(p, defaultQuantity(p, input), input);
   if (cap > 0 && units / cap > 0.35 && !wanted.has(p.id)) s -= 15;
   if (c.warnings.length && !wanted.has(p.id)) s -= 3;
   return s;
@@ -222,10 +294,17 @@ function reasonFor(c: Candidate, input: PlanInput, wanted: Set<string>, implied:
     .filter(Boolean);
   if (goalNames.length) parts.push(`fits your ${goalNames.slice(0, 2).join(" and ")} goal${goalNames.length > 1 ? "s" : ""}`);
   else if (implied.has(p.id)) parts.push("matches what you told us you like");
-  if (p.difficulty === 1 && input.experience !== "experienced") parts.push("very forgiving for beginners");
-  if (input.sun !== "full" && p.sun === "partial") parts.push("happy with less than full sun");
-  if (p.perennial) parts.push("comes back every year");
-  if (p.succession) parts.push(`quick to grow, so you can re-sow every ${p.succession} weeks`);
+  if (isIndoor(input)) {
+    if (indoorDifficulty(p) === 1 && input.experience !== "experienced") parts.push("easy to grow indoors");
+    if (p.indoor?.start === "scraps") parts.push("regrows from grocery-store scraps");
+    if (p.indoor?.resow) parts.push(`ready in about ${Math.round(p.indoor.dtm / 7) || 1} week${p.indoor.dtm >= 11 ? "s" : ""}, so re-sow every ${p.indoor.resow} weeks`);
+    else if (p.category === "herb") parts.push("keeps producing for months if you snip it often");
+  } else {
+    if (p.difficulty === 1 && input.experience !== "experienced") parts.push("very forgiving for beginners");
+    if (input.sun !== "full" && p.sun === "partial") parts.push("happy with less than full sun");
+    if (p.perennial) parts.push("comes back every year");
+    if (p.succession) parts.push(`quick to grow, so you can re-sow every ${p.succession} weeks`);
+  }
   if (parts.length === 0) parts.push(p.yield);
   const text = parts.join("; ");
   return text.charAt(0).toUpperCase() + text.slice(1) + ".";
@@ -233,24 +312,25 @@ function reasonFor(c: Candidate, input: PlanInput, wanted: Set<string>, implied:
 
 /** The crops that most define each goal; they get a boost so every goal is well represented. */
 const GOAL_CORE: Record<Goal, string[]> = {
-  salad: ["lettuce", "cherry-tomato", "cucumber", "radish", "spinach", "arugula"],
+  salad: ["lettuce", "cherry-tomato", "cucumber", "radish", "spinach", "arugula", "microgreens"],
   salsa: ["tomato", "paste-tomato", "hot-pepper", "bell-pepper", "cilantro", "scallions"],
   herbs: ["basil", "parsley", "chives", "thyme", "oregano", "cilantro"],
   pizza: ["paste-tomato", "basil", "oregano", "bell-pepper", "arugula"],
   pollinators: ["zinnia", "marigold", "calendula", "sunflower", "nasturtium"],
-  kids: ["cherry-tomato", "snap-peas", "radish", "sunflower", "strawberry", "pumpkin", "carrot"],
+  kids: ["cherry-tomato", "snap-peas", "radish", "sunflower", "strawberry", "pumpkin", "carrot", "microgreens"],
   "cooking-greens": ["kale", "swiss-chard", "spinach", "broccoli", "bok-choy"],
   preserving: ["paste-tomato", "cucumber", "bush-beans", "winter-squash", "hot-pepper"],
   "low-maintenance": ["swiss-chard", "kale", "bush-beans", "cherry-tomato", "zucchini", "garlic"],
 };
 
 /** Plants we never scale past this many per household, however much space there is. */
-function maxQuantity(p: Plant, household: number): number {
-  const def = defaultQuantity(p, household);
+function maxQuantity(p: Plant, input: PlanInput): number {
+  const def = defaultQuantity(p, input);
+  if (isIndoor(input)) return def * 2;
   if (p.id === "mint") return 1;
   if (p.perennial && p.id !== "strawberry") return Math.max(def, 2);
   if (p.category === "herb") return Math.max(def, p.perSqFt >= 1 ? p.perSqFt * 2 : 2);
-  if (p.id === "zucchini") return Math.max(def, Math.ceil(household / 2) + 1);
+  if (p.id === "zucchini") return Math.max(def, Math.ceil(input.household / 2) + 1);
   // Big plants (tomatoes, squash, melons) are very productive: a little extra goes a long way.
   if (p.perSqFt < 1) return Math.max(def, Math.ceil(def * 1.5));
   // One-per-square plants (peppers, kale, broccoli, strawberries): a couple more at most.
@@ -263,7 +343,11 @@ function maxQuantity(p: Plant, household: number): number {
  * The rule-based designer: used when AI is unavailable, and as a safety net that keeps the
  * AI honest (feasibility and space are always enforced by the engine, not the model).
  */
-export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation, ctx: SeasonContext): Design {
+/** Feasible plants, best first, scored against the user's goals, notes, experience, time and space. */
+export function rankCandidates(
+  input: PlanInput,
+  evaluation: CatalogEvaluation,
+): { ranked: { c: Candidate; s: number }[]; wanted: Set<string>; implied: Set<string> } {
   const notes = plantsFromNotes(input.notes);
   const wanted = new Set([...input.wants, ...notes.named]);
   const implied = new Set(notes.implied);
@@ -271,10 +355,18 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
   const ranked = evaluation.feasible
     .map((c) => ({ c, s: score(c, input, wanted, implied) + (core.has(c.plant.id) ? 10 : 0) }))
     .sort((a, b) => b.s - a.s || a.c.plant.difficulty - b.c.plant.difficulty);
+  return { ranked, wanted, implied };
+}
+
+export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation, ctx: SeasonContext): Design {
+  const { ranked, wanted, implied } = rankCandidates(input, evaluation);
+  const indoor = isIndoor(input);
 
   const capacity = capacityUnits(input);
   const target = targetCropCount(input);
-  const herbCap = input.goals.length === 1 && input.goals[0] === "herbs" ? target : Math.max(2, Math.ceil(target / 3));
+  // Windowsill gardens are mostly herbs, and that's fine.
+  const herbCap =
+    indoor || (input.goals.length === 1 && input.goals[0] === "herbs") ? target : Math.max(2, Math.ceil(target / 3));
   let used = 0;
   const chosen: Candidate[] = [];
   const selections: PlantSelection[] = [];
@@ -292,7 +384,7 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
       if (group && chosen.filter((x) => group.ids.includes(x.plant.id)).length >= group.max) return false;
       if (p.category === "herb" && chosen.filter((x) => x.plant.category === "herb").length >= herbCap) return false;
     }
-    let qty = roundToPots(p, defaultQuantity(p, input.household), input);
+    let qty = roundToPots(p, defaultQuantity(p, input), input);
     const left = capacity - used;
     const min = minimumQuantity(p);
     while (qty > min && spaceUnits(p, qty, input) > left) {
@@ -306,7 +398,7 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
     }
     used += units;
     chosen.push(c);
-    selections.push({ plantId: p.id, quantity: qty, variety: p.varieties[0] ?? "", reason: reasonFor(c, input, wanted, implied) });
+    selections.push({ plantId: p.id, quantity: qty, variety: defaultVariety(p, input), reason: reasonFor(c, input, wanted, implied) });
     return true;
   };
 
@@ -328,13 +420,13 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
   }
 
   // 4. A few flowers pull in pollinators and beneficial insects. Add one if there's room.
-  if (!chosen.some((c) => c.plant.category === "flower") && capacity - used >= 1 && capacity >= 12) {
+  if (!indoor && !chosen.some((c) => c.plant.category === "flower") && capacity - used >= 1 && capacity >= 12) {
     const prefer = ctx.season === "fall" ? ["calendula"] : ["marigold", "nasturtium", "zinnia", "calendula"];
     const flower = prefer
       .map((id) => evaluation.feasible.find((c) => c.plant.id === id))
       .find((c): c is Candidate => Boolean(c) && !chosen.some((x) => conflicts(x.plant, c!.plant)));
     if (flower) {
-      const qty = Math.min(defaultQuantity(flower.plant, 1), flower.plant.perSqFt >= 1 ? flower.plant.perSqFt : 1);
+      const qty = Math.min(defaultQuantity(flower.plant, { ...input, household: 1 }), flower.plant.perSqFt >= 1 ? flower.plant.perSqFt : 1);
       const units = spaceUnits(flower.plant, qty, input);
       if (units <= capacity - used) {
         used += units;
@@ -359,8 +451,8 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
   return {
     selections,
     skipped,
-    summary: rulesSummary(input, ctx, selections),
-    tips: rulesTips(input, ctx),
+    summary: indoor ? indoorSummary(input, selections) : rulesSummary(input, ctx, selections),
+    tips: indoor ? indoorTips(input, ctx.today) : rulesTips(input, ctx),
     source: "rules",
   };
 }
@@ -429,7 +521,7 @@ export function normalizeDesign(design: Design, input: PlanInput, evaluation: Ca
     const qty = roundToPots(plant, Math.max(minimumQuantity(plant), Math.min(200, Math.round(sel.quantity))), input);
     const prev = merged.get(plant.id);
     if (prev) prev.quantity += qty;
-    else merged.set(plant.id, { ...sel, quantity: qty, variety: sel.variety || plant.varieties[0] || "" });
+    else merged.set(plant.id, { ...sel, quantity: qty, variety: sel.variety || defaultVariety(plant, input) });
   }
 
   const notes = plantsFromNotes(input.notes);
@@ -439,8 +531,8 @@ export function normalizeDesign(design: Design, input: PlanInput, evaluation: Ca
     if (feasible.has(id)) {
       merged.set(id, {
         plantId: id,
-        quantity: defaultQuantity(plant, input.household),
-        variety: plant.varieties[0] ?? "",
+        quantity: roundToPots(plant, defaultQuantity(plant, input), input),
+        variety: defaultVariety(plant, input),
         reason: "You asked for it.",
       });
     } else {
@@ -476,7 +568,8 @@ export function fitDesignToSpace(design: Design, input: PlanInput): Design {
     });
     const target = order[0];
     const p = PLANTS_BY_ID[target.plantId];
-    const step = p.perSqFt >= 1 && target.quantity > p.perSqFt ? p.perSqFt : 1;
+    const pot = input.areas.some((a) => a.kind === "bed") ? 0 : perPot(p, input);
+    const step = pot >= 1 ? Math.min(pot, target.quantity) : p.perSqFt >= 1 && target.quantity > p.perSqFt ? p.perSqFt : 1;
     if (target.quantity - step >= minimumQuantity(p)) {
       target.quantity -= step;
     } else {
@@ -496,18 +589,21 @@ export function growToFill(selections: PlantSelection[], input: PlanInput, alrea
   const capacity = capacityUnits(input);
   let used =
     alreadyUsed ?? selections.reduce((n, s) => n + spaceUnits(PLANTS_BY_ID[s.plantId], s.quantity, input), 0);
+  // Windowsills are small: fill every pot rather than leave one empty.
+  const fill = isIndoor(input) ? 1 : 0.9;
   for (const bigPlants of [false, true]) {
-    const goal = Math.floor(capacity * (bigPlants ? 0.7 : 0.9));
+    const goal = Math.floor(capacity * (bigPlants ? 0.7 : fill));
     let grew = true;
     while (used < goal && grew) {
       grew = false;
       for (const sel of selections) {
         const p = PLANTS_BY_ID[sel.plantId];
         if (!p || p.category === "flower" || used >= goal || p.perSqFt < 1 !== bigPlants) continue;
-        const per = input.areas.some((a) => a.kind === "bed") ? 0 : plantsPerPot(p, maxPotGallons(input.areas));
-        const step = per > 1 ? per : p.perSqFt >= 1 ? p.perSqFt : 1;
+        const per = input.areas.some((a) => a.kind === "bed") ? 0 : perPot(p, input);
+        // In pots, grow a whole pot at a time; in beds, a square foot at a time.
+        const step = per >= 1 ? per : p.perSqFt >= 1 ? p.perSqFt : 1;
         const next = sel.quantity + step;
-        if (next > Math.max(maxQuantity(p, input.household), per)) continue;
+        if (next > Math.max(maxQuantity(p, input), per)) continue;
         const delta = spaceUnits(p, next, input) - spaceUnits(p, sel.quantity, input);
         if (used + delta > capacity) continue;
         sel.quantity = next;
@@ -521,4 +617,35 @@ export function growToFill(selections: PlantSelection[], input: PlanInput, alrea
 /** Space units a design asks for. */
 export function designUnits(design: Design, input: PlanInput): number {
   return design.selections.reduce((n, s) => n + spaceUnits(PLANTS_BY_ID[s.plantId], s.quantity, input), 0);
+}
+
+/**
+ * Windowsills are small, so an empty pot is a wasted one. When a design leaves pots free
+ * (often because the engine dropped a pick that can't work), add the next-best plants, one pot
+ * each, then grow what's there. Skips anything the design deliberately left out. Mutates it.
+ */
+export function fillSparePots(design: Design, input: PlanInput, evaluation: CatalogEvaluation): void {
+  const capacity = capacityUnits(input);
+  let used = designUnits(design, input);
+  if (used >= capacity) return;
+  const { ranked, wanted, implied } = rankCandidates(input, evaluation);
+  const skipped = new Set(design.skipped.map((s) => s.name.toLowerCase()));
+  for (const { c, s } of ranked) {
+    if (used >= capacity) break;
+    const p = c.plant;
+    if (s < 0 || skipped.has(p.name.toLowerCase()) || design.selections.some((x) => x.plantId === p.id)) continue;
+    const qty = Math.max(1, perPot(p, input));
+    const units = spaceUnits(p, qty, input);
+    if (used + units > capacity) continue;
+    design.selections.push({ plantId: p.id, quantity: qty, variety: defaultVariety(p, input), reason: reasonFor(c, input, wanted, implied) });
+    used += units;
+  }
+  growToFill(design.selections, input, used);
+}
+
+/** The plan summary and tips we write ourselves, used when the AI's no longer match the plan. */
+export function templateText(input: PlanInput, ctx: SeasonContext, selections: PlantSelection[]): { summary: string; tips: string[] } {
+  return isIndoor(input)
+    ? { summary: indoorSummary(input, selections), tips: indoorTips(input, ctx.today) }
+    : { summary: rulesSummary(input, ctx, selections), tips: rulesTips(input, ctx) };
 }

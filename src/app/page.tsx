@@ -67,11 +67,15 @@ const FAQ = [
   },
   {
     q: "How do you know my frost dates?",
-    a: "We look up your USDA hardiness zone from your ZIP code and use the typical frost dates for that zone. Know your exact local dates? You can adjust them.",
+    a: "We find the NOAA weather station nearest your ZIP code and use its 30-year frost dates and temperatures. Know your exact local dates? You can adjust them.",
   },
   {
     q: "What if I only have a balcony or patio?",
     a: "Container gardens are fully supported. We pick compact varieties and tell you how many plants fit in each pot size.",
+  },
+  {
+    q: "Can I grow indoors, on a windowsill?",
+    a: "Yes. Choose Indoors and tell us which way your window faces, your pot size and whether you have a grow light. We'll pick herbs and greens that suit your light (and your pets), and give you a year-round sowing and care calendar.",
   },
   {
     q: "What happens to my photo?",
@@ -224,6 +228,13 @@ export default function Home() {
                 {g.label}
               </Link>
             ))}
+            <Link
+              href="/plan/new?space=indoor&goal=herbs"
+              className="inline-flex items-center gap-2 rounded-full bg-sun-400 px-4 py-2.5 font-semibold text-ink transition-colors hover:bg-sun-300"
+            >
+              <span aria-hidden>🪟</span>
+              Windowsill herbs
+            </Link>
           </div>
         </div>
       </section>

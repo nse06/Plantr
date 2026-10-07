@@ -36,6 +36,12 @@ export function nextTask(plan: GardenPlan, done: Set<string>, today: string): Pl
   return plan.tasks.find((t) => t.date >= today && !done.has(t.id)) ?? null;
 }
 
+/** "Fall 2026", "2026 season" or "Indoor, year-round". */
+export function seasonLabel(plan: Pick<GardenPlan, "season" | "year">): string {
+  if (plan.season === "indoor") return "Indoor, year-round";
+  return plan.season === "fall" ? `Fall ${plan.year}` : `${plan.year} season`;
+}
+
 export function seasonOver(plan: GardenPlan, today: string): boolean {
   const last = plan.plants.reduce((d, p) => (p.schedule.harvestEnd > d ? p.schedule.harvestEnd : d), "");
   return Boolean(last) && today > addDays(last, -14);

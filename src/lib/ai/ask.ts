@@ -1,6 +1,7 @@
 import type { GardenPlan, PlanInput } from "@/lib/garden/types";
 import { fmtMMDD, fmtShort } from "@/lib/garden/dates";
-import { FALLBACK_BETA, MODEL, getClient, logAiError } from "./client";
+import { isIndoor, lightLabel } from "@/lib/garden/indoor";
+import { aiSettings, effortParam, modelParams, runAi } from "./client";
 
 // "Ask Plantr": short, garden-aware answers to everyday questions
 // ("my tomato leaves have yellow spots", "can I still plant lettuce?").
@@ -31,10 +32,13 @@ export function gardenContext(input: PlanInput, plan: GardenPlan, today: string)
     .slice(0, 6)
     .map((t) => `${fmtShort(t.date)}: ${t.title}`)
     .join("; ");
+  const garden = isIndoor(input)
+    ? `indoor garden on ${lightLabel(input.indoor)}${input.indoor?.pets ? ", with pets in the home" : ""}`
+    : `${plan.season === "fall" ? "fall" : "spring/summer"} ${plan.year} plan; sun: ${input.sun}`;
   return [
     `Today: ${today}.`,
     `Location: ZIP ${input.zip}, zone ${c.zone}${c.frostFree ? " (frost-free)" : `, last frost ~${fmtMMDD(c.lastFrost)}, first frost ~${fmtMMDD(c.firstFrost)}`}.`,
-    `Garden: ${plan.season === "fall" ? "fall" : "spring/summer"} ${plan.year} plan; sun: ${input.sun}; experience: ${input.experience}.`,
+    `Garden: ${garden}; experience: ${input.experience}.`,
     `Growing: ${plants || "nothing yet"}.`,
     upcoming ? `Coming up: ${upcoming}.` : "",
   ]
@@ -43,15 +47,12 @@ export function gardenContext(input: PlanInput, plan: GardenPlan, today: string)
 }
 
 export async function askPlantr(question: string, context: string): Promise<string | null> {
-  const client = getClient();
-  if (!client) return null;
-  try {
-    const response = await client.beta.messages.create({
-      model: MODEL,
+  const settings = aiSettings("ask");
+  const response = await runAi("ask", settings, (client) =>
+    client.beta.messages.create({
+      ...modelParams(settings),
       max_tokens: 4000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
-      output_config: { effort: "low" },
+      ...(settings.effort ? { output_config: effortParam(settings) } : {}),
       system: SYSTEM,
       messages: [
         {
@@ -59,16 +60,13 @@ export async function askPlantr(question: string, context: string): Promise<stri
           content: `About my garden:\n${context}\n\nMy question: ${question.slice(0, 800)}`,
         },
       ],
-    });
-    if (response.stop_reason === "refusal") return null;
-    const text = response.content
-      .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
-      .map((b) => b.text)
-      .join("\n")
-      .trim();
-    return text || null;
-  } catch (err) {
-    logAiError("ask", err);
-    return null;
-  }
+    }),
+  );
+  if (!response || response.stop_reason === "refusal") return null;
+  const text = response.content
+    .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+  return text || null;
 }
