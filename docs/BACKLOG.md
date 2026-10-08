@@ -125,6 +125,15 @@ Watch-outs:
 - **"Pot" reads as cannabis.** "Plot and Pot" returns weed-growing games.
 - **Near-misses:** "Lettuce Begin" and "Lettuce Plant" riff on Lettuce Grow, an existing garden company; "Garden Sage: Plant Identifier" is an App Store app; "ZoneSprout - US Garden Planner" is a direct competitor.
 
+### Single words
+
+Real garden words are taken as both .com and .app: Bower, Glade, Bramble, Hedgerow, Twine, Cloche, Trug, Peasy, Pipkin, Plantlet, Coldframe and more. Invented words do better.
+
+- **Seedlark** (favorite): seeds plus the lark (a field songbird, and "a lark" means fun). Free as .app, .co and .garden, and getseedlark.com and seedlarkapp.com are free; seedlark.com is for sale on the Atom name marketplace. No apps or businesses found using it.
+- **Free as .com and .app:** Dirtsy; Plotsie (but the App Store already has "Plotsy TV" and "Plotsy: Symptom Diary"); Bedwright and Sproutwright ("-wright" means maker); SillSprout (indoor); and the "sow" names (SowCue, Sowsome, Sowsie, Sowtopia, SowClock).
+- **Free as .app only, no App Store clash:** Seedery, Seedfolk, Hortly, Seedtide, Sunling, Verdling, Leafkin (though "leaf" names sit next to cannabis apps). Also free as .app: Sprigo, Hortivo, Plotlark, Sproutery.
+- **Out:** Seedtime (an existing garden planner app), Sproutkin (an existing app), Pipkin (three apps), Thymer (a timer app), Bramble (several apps), Sproutopia (a game), and Gardenry (one letter from Gardenary, a kitchen-garden coaching business with its own app).
+
 ## Monetization: affiliate links
 
 **Built (October 2026):** store buttons on every shopping-list item (Amazon and Home Depot searches, best store first), affiliate tags from `AFFILIATE_AMAZON_TAG` and `AFFILIATE_HOME_DEPOT_TEMPLATE`, an FTC and Amazon disclosure while tags are set, `rel="sponsored"`, and anonymous click counts (`shop_clicks`, `npm run shop:clicks`). Merchant data lives in `src/lib/shop.ts`, apart from the plant data. See the README.
