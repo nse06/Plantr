@@ -101,6 +101,30 @@ Checked October 8, 2026 (domains by RDAP, App Store by Apple's search API). "Fre
 
 Taken on both .com and .app: Sproutly, Sowly, Seedwise, Gardenwise, PlotPal, Yardly, Greenprint, GardenPal, Rootwise, Gardenly, PlantPal, GardenBuddy, GardenMate, Plotwise, Tendril, Thymeline, PocketPlot, TinyPlot, Plotsy, Sprouty, Furrow, Plotlings and others. "Lettuce Plan" (.app free) is already the name of an App Store app.
 
+### Round 2
+
+Also checked October 8, 2026. Free on both .com and .app, with no App Store or web conflicts found:
+
+| Name | Notes |
+| --- | --- |
+| **Sunday Plot** | Relaxed weekend gardening, easy to say and spell. "Sunday gardens" are a 2026 garden-trend phrase. |
+| **Patch & Plate** (patchandplate) | Garden to table: fits the food gardens Plantr plans best. |
+| **Starter Plot** | Says "for beginners" outright. |
+| **Sunny Plot** | Cheerful and simple. |
+| Sun & Sprout (sunandsprout) | Warm, but "sprout" is crowded among garden apps, and an old "Sun Sprout" trademark covers sprouting kits. |
+
+- **Indoor-only names** (good for an indoor edition): Sill to Salad, Seed & Sill, Sill & Sprout, SillSprout.
+- **Playful:** Plot Picnic, Bed & Bloom, Pod & Patch, Sprout & Supper, Twine & Thyme, Backyard Sprout.
+- **Also free on both:** Garden Nudge, Leafy Plan, SowClock, Sow Ready, Sow Steady, Sowsome, Sowsie, Sowtopia, Sow & Snack, Plot Sprouts, Sprout Supper, Sprout & Sun.
+- **.app only:** Little Almanac, Sproutcast, Weekend Plot, Sunday Sprout, Honey Plot, Peas Please, Leaf & Ladle, Kitchen Patch, Pocket Patch, Bed & Sprout, Sow Bright, Plotopia.
+- **Taken on both:** Plant Pilot, Garden Pilot, Sprout Scout, Plotwell, Tendwell, Sow Simple, Hello Sprout, Hey Sprout, Gnomie, Potager, Tilth, Rootle, Little Sprout and others.
+
+Watch-outs:
+
+- **"Sow" is also a female pig.** App Store searches for "Sow Ready" and "Sow Steady" return pig-farming apps. Gardeners read it right in context, but it applies to SowCue too.
+- **"Pot" reads as cannabis.** "Plot and Pot" returns weed-growing games.
+- **Near-misses:** "Lettuce Begin" and "Lettuce Plant" riff on Lettuce Grow, an existing garden company; "Garden Sage: Plant Identifier" is an App Store app; "ZoneSprout - US Garden Planner" is a direct competitor.
+
 ## Monetization: affiliate links
 
 **Built (October 2026):** store buttons on every shopping-list item (Amazon and Home Depot searches, best store first), affiliate tags from `AFFILIATE_AMAZON_TAG` and `AFFILIATE_HOME_DEPOT_TEMPLATE`, an FTC and Amazon disclosure while tags are set, `rel="sponsored"`, and anonymous click counts (`shop_clicks`, `npm run shop:clicks`). Merchant data lives in `src/lib/shop.ts`, apart from the plant data. See the README.
