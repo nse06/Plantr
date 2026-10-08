@@ -199,6 +199,22 @@ describe("cheers and reports", () => {
   });
 });
 
+describe("weekly cheer news", () => {
+  it("counts the week's cheers and names only people with public profiles", async () => {
+    const named = await auth.findOrCreateUser("named@example.com");
+    expect(await social.updateProfile(named.id, { handle: "pepper-pal", displayName: "Pepper Pal" })).toBeNull();
+    expect(await social.toggleCheer(garden, named)).toMatchObject({ cheered: true });
+    expect(await social.toggleCheer(garden, fan)).toMatchObject({ cheered: true });
+    const { addDays } = await import("@/lib/garden/dates");
+    const today = new Date().toISOString().slice(0, 10);
+    const [news] = await social.cheerNews([garden], addDays(today, -7), addDays(today, 1));
+    expect(news).toMatchObject({ gardenId: garden.id, gardenName: "Salsa garden 2027", count: 2, total: 2 });
+    // The fan has no public profile, so they're counted but never named.
+    expect(news.names).toEqual(["Pepper Pal"]);
+    expect(await social.cheerNews([garden], addDays(today, -30), addDays(today, -7))).toEqual([]);
+  });
+});
+
 describe("deleting an account", () => {
   it("removes the user's gardens, photos and cheers", async () => {
     await social.toggleCheer(garden, fan);

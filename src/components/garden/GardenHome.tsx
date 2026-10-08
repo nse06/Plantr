@@ -14,6 +14,7 @@ import { TaskItem, useTaskDone } from "./tasks";
 import { Button, ButtonLink, Card, Chip, Spinner, buttonClass, cx } from "@/components/ui";
 import type { PhotoMeta } from "@/lib/sharing";
 import { PhotoJournal } from "@/components/social/PhotoJournal";
+import { ThinkingLeaves } from "@/components/loaders";
 import { ShareCard } from "@/components/social/ShareCard";
 
 export interface GardenHomeProps {
@@ -521,6 +522,11 @@ function AskPlantr({ gardenId, today }: { gardenId: string; today: string }) {
           {busy ? <Spinner className="h-4 w-4" /> : <Send className="h-4 w-4" />}
         </button>
       </form>
+      {busy && (
+        <div className="mt-3">
+          <ThinkingLeaves />
+        </div>
+      )}
       {!answer && !busy && (
         <div className="mt-3 flex flex-col gap-1.5">
           {SUGGESTIONS.map((s) => (

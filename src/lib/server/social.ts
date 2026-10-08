@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Garden, User } from "@/db/schema";
 import type { PlannedPlant } from "@/lib/garden/types";
@@ -403,6 +403,52 @@ export async function toggleCheer(garden: Garden, user: User): Promise<{ cheered
   else await db.insert(schema.cheers).values({ gardenId: garden.id, userId: user.id, createdAt: new Date().toISOString() }).onConflictDoNothing();
   const [count] = await db.select({ n: sql<number>`count(*)` }).from(schema.cheers).where(eq(schema.cheers.gardenId, garden.id));
   return { cheered: !existing, count: Number(count?.n ?? 0) };
+}
+
+/** New cheers on one garden, for the weekly email. */
+export interface CheerNews {
+  gardenId: string;
+  gardenName: string;
+  /** Cheers in the window. */
+  count: number;
+  /** Up to two cheerers with a public profile, newest first. Others are counted, never named. */
+  names: string[];
+  /** All cheers the garden has ever had. */
+  total: number;
+}
+
+/**
+ * Cheers on these gardens from `from` (inclusive) to `to` (exclusive), both ISO dates. People
+ * without a public profile are never named, because their only identity is their email.
+ */
+export async function cheerNews(gardens: Pick<Garden, "id" | "name">[], from: string, to: string): Promise<CheerNews[]> {
+  if (gardens.length === 0) return [];
+  const db = getDb();
+  const ids = gardens.map((g) => g.id);
+  const [recent, totals] = await Promise.all([
+    db
+      .select({ gardenId: schema.cheers.gardenId, handle: schema.users.handle, displayName: schema.users.displayName })
+      .from(schema.cheers)
+      .innerJoin(schema.users, eq(schema.cheers.userId, schema.users.id))
+      .where(and(inArray(schema.cheers.gardenId, ids), gte(schema.cheers.createdAt, from), lt(schema.cheers.createdAt, to)))
+      .orderBy(desc(schema.cheers.createdAt)),
+    db
+      .select({ gardenId: schema.cheers.gardenId, n: sql<number>`count(*)` })
+      .from(schema.cheers)
+      .where(inArray(schema.cheers.gardenId, ids))
+      .groupBy(schema.cheers.gardenId),
+  ]);
+  const total = new Map(totals.map((t) => [t.gardenId, Number(t.n)]));
+  return gardens
+    .map((g) => {
+      const rows = recent.filter((r) => r.gardenId === g.id);
+      const names = rows
+        .map((r) => r.displayName || (r.handle ? `@${r.handle}` : null))
+        .filter((n): n is string => Boolean(n))
+        .slice(0, 2);
+      return { gardenId: g.id, gardenName: g.name, count: rows.length, names, total: total.get(g.id) ?? rows.length };
+    })
+    .filter((n) => n.count > 0);
 }
 
 // ---------------------------------------------------------------------------

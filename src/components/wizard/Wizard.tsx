@@ -35,6 +35,7 @@ import { fmtMMDD, todayISO } from "@/lib/garden/dates";
 import { INDOOR_POTS, INDOOR_WEEKS, potForInches } from "@/lib/garden/indoor";
 import type { SeasonOption } from "@/lib/garden/schedule";
 import { Button, Card, Spinner, cx } from "@/components/ui";
+import { PlantScene } from "@/components/loaders";
 import { prepareImage } from "./image";
 
 // ---------------------------------------------------------------------------
@@ -1490,17 +1491,8 @@ function Generating({
         </>
       ) : (
         <>
-          <svg viewBox="0 0 120 120" className="h-32 w-32" aria-hidden>
-            <ellipse cx="60" cy="104" rx="38" ry="8" fill="#7a5a3f" opacity="0.25" />
-            <path d="M30 98h60l-6 14H36z" fill="#c8643b" />
-            <rect x="26" y="92" width="68" height="9" rx="3" fill="#d9845e" />
-            <g className="animate-sway" style={{ transformOrigin: "60px 92px" }}>
-              <path d="M60 92V52" stroke="#2f6b3b" strokeWidth="4" strokeLinecap="round" />
-              <path d="M60 64c0-14 9-23 25-23 0 14-10 23-25 23z" fill="#468a3d" />
-              <path d="M60 74c0-11-7-18-20-18 0 11 8 18 20 18z" fill="#67a75a" />
-              <circle cx="60" cy="48" r="6" fill="#f2b33d" />
-            </g>
-          </svg>
+          {/* The plant grows a stage with every progress message, and blooms (bee and all) at the end. */}
+          <PlantScene stage={i + 1} indoor={indoor} size={168} />
           <h1 className="mt-4 font-display text-2xl font-semibold">Designing your garden</h1>
           <p className="mt-2 min-h-[48px] text-[17px] text-muted" aria-live="polite">
             {messages[i]}
@@ -1511,7 +1503,7 @@ function Generating({
               style={{ width: `${Math.round(((i + 1) / messages.length) * 92)}%` }}
             />
           </div>
-          <p className="mt-6 text-sm text-faint">This usually takes 15–40 seconds.</p>
+          <p className="mt-6 text-sm text-faint">Hang tight. This can take up to a minute.</p>
         </>
       )}
     </div>

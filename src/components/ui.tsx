@@ -87,11 +87,16 @@ export function SectionTitle({ eyebrow, title, children }: { eyebrow?: string; t
   );
 }
 
+/** A little daisy whose petals light up in turn, like a classic activity spinner. */
 export function Spinner({ className }: { className?: string }) {
   return (
-    <svg className={cx("animate-spin", className ?? "h-5 w-5")} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
-      <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    <svg className={cx("shrink-0", className ?? "h-5 w-5")} viewBox="0 0 24 24" aria-hidden>
+      <g className="animate-petals" style={{ transformOrigin: "12px 12px" }}>
+        {Array.from({ length: 8 }, (_, i) => (
+          <ellipse key={i} cx="12" cy="4.6" rx="2.3" ry="3.6" fill="currentColor" opacity={0.25 + i * 0.1} transform={`rotate(${i * 45} 12 12)`} />
+        ))}
+      </g>
+      <circle cx="12" cy="12" r="2.8" fill="#f2b33d" />
     </svg>
   );
 }

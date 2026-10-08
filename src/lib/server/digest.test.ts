@@ -81,6 +81,26 @@ describe("weekly digest", () => {
     expect(digestForGarden(g, done, day).upcoming).toHaveLength(0);
   });
 
+  it("sends cheers on their own, naming only people with public profiles", () => {
+    const g = garden("2026-12-01");
+    const quiet = digestForGarden(g, new Set(), "2026-12-01");
+    const email = renderDigest(user, [quiet], [
+      { gardenId: g.id, gardenName: "Salad garden 2027", count: 3, names: ["<b>Sam</b>", "@pepper-pal"], total: 5 },
+    ]);
+    expect(email?.subject).toBe("Your garden got 3 new cheers this week 🌱");
+    expect(email?.html).toContain("<strong>&lt;b&gt;Sam&lt;/b&gt;</strong>, <strong>@pepper-pal</strong> and 1 other gardener cheered");
+    expect(email?.html).toContain(`/g/${g.id}`);
+    expect(email?.text).toContain("That's 5 cheers in all.");
+  });
+
+  it("adds cheers to a busy week's subject line", () => {
+    const g = garden("2026-12-01");
+    const busy = digestForGarden(g, new Set(), g.plan.tasks[0].date);
+    const email = renderDigest(user, [busy], [{ gardenId: g.id, gardenName: g.name, count: 1, names: [], total: 1 }]);
+    expect(email?.subject).toMatch(/to do, plus 1 new cheer$/);
+    expect(email?.text).toContain("A gardener cheered Salad garden 2027 this week.");
+  });
+
   it("signs unsubscribe links so they can't be forged", () => {
     const url = new URL(unsubscribeUrl("u1"));
     expect(verifySignature("digest:u1", url.searchParams.get("sig")!)).toBe(true);

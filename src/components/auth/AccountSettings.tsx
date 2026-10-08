@@ -47,7 +47,7 @@ export function AccountSettings({ email, digest: initialDigest }: { email: strin
         <Bell className="mt-0.5 h-5 w-5 shrink-0 text-leaf-600" />
         <div className="flex-1">
           <p className="font-semibold">Weekly garden email</p>
-          <p className="text-sm text-muted">A short note each week with exactly what to do in your saved gardens.</p>
+          <p className="text-sm text-muted">A short note each week with exactly what to do in your saved gardens, plus any new cheers on gardens you share.</p>
         </div>
         <button
           type="button"

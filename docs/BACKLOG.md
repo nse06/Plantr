@@ -59,11 +59,10 @@ What it takes to build: Stripe Checkout and the customer portal, a `subscription
 
 ## Sharing and community
 
-**Built (October 2026):** opt-in public profiles and garden pages, photo diaries, Explore, cheers, reports with automatic hiding, and an admin review page. See the README.
+**Built (October 2026):** opt-in public profiles and garden pages, photo diaries, Explore, cheers (reported in the weekly email), reports with automatic hiding, and an admin review page. See the README.
 
 Next ideas, roughly in order:
 
-- **Cheers in the weekly email:** "3 people cheered your salsa garden this week." Cheap, and it brings people back.
 - **Follow gardeners** and a "Following" tab in Explore; filter Explore by zone, indoor/outdoor and goal.
 - **Comments,** only once moderation is ready for them: report and delete, a word filter, and maybe comments limited to signed-in accounts older than a day.
 - **Automated image screening** on upload (a moderation API) before photo volume grows, plus blocking users.

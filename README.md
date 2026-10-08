@@ -54,7 +54,7 @@ Sharing is off until a gardener turns it on for a garden ("Share on your profile
 - **Pages:** a public garden page (`/g/[id]`) with photos, layout, crops and progress; a profile (`/u/[handle]`) listing someone's shared gardens; and **Explore** (`/explore`), the most recently active shared gardens. Every public garden ends with "Plan my garden", which starts the wizard with the same goals.
 - **Photos:** owners post photo updates from the garden page. The browser resizes them (1280 px, plus a 720 px thumbnail), and the server checks they're real JPEGs and strips metadata (EXIF, including GPS location) before storing them in the database, up to 60 per garden.
 - **Profiles:** a handle is created the first time someone shares (a random one like `leafy-radish-27`, never derived from their email), and can be changed on the account page along with a display name and short bio.
-- **Cheers and reports:** signed-in visitors can cheer a garden (one per person). Anyone can report a garden or photo; three distinct reports hide it until an admin keeps or removes it at `/admin` (admins are listed in `ADMIN_EMAILS`).
+- **Cheers and reports:** signed-in visitors can cheer a garden (one per person), and the weekly email tells the owner about the week's new cheers, naming cheerers who have public profiles; a week with new cheers gets an email even if there's nothing to do. Anyone can report a garden or photo; three distinct reports hide it until an admin keeps or removes it at `/admin` (admins are listed in `ADMIN_EMAILS`).
 - **Privacy:** public pages show the state and growing zone, never the ZIP code or email address.
 
 ### On iPhone
