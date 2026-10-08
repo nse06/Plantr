@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, ArrowRight, CalendarDays, LayoutGrid, MessageCircle, NotebookPen, Pencil, Scale, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Archive, ArrowRight, CalendarDays, LayoutGrid, MessageCircle, NotebookPen, Pencil, Scale, Send, ShoppingBasket, Sparkles, Trash2, X } from "lucide-react";
 import type { GardenPlan, PlanInput } from "@/lib/garden/types";
 import type { JournalEntry } from "@/db/schema";
 import { fmtDay, fmtShort, todayISO } from "@/lib/garden/dates";
@@ -145,9 +145,12 @@ export function GardenHome({
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href={`/plan/${garden.id}#layout`} className={buttonClass("secondary", "sm")}>
             <LayoutGrid className="h-4 w-4" /> Layout
+          </Link>
+          <Link href={`/plan/${garden.id}#shopping`} className={buttonClass("secondary", "sm")}>
+            <ShoppingBasket className="h-4 w-4" /> Shopping
           </Link>
           <Link href={`/plan/${garden.id}#calendar`} className={buttonClass("secondary", "sm")}>
             <CalendarDays className="h-4 w-4" /> Full plan

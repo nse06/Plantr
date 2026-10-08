@@ -72,14 +72,46 @@ Next ideas, roughly in order:
 
 ## iPhone app
 
-Today Plantr works on iPhone as a home-screen web app (Safari → Share → Add to Home Screen) with sign-in codes. A native app would add push notifications, widgets and better camera access. The cheapest path is a Capacitor shell around the site, built by GitHub Actions on a macOS runner. That build can be sideloaded (it needs re-signing every 7 days with a free Apple ID) or sent through TestFlight with a $99/year Apple Developer account. For the App Store, Apple rejects thin website wrappers (guideline 4.2), so ship it with real native features: push reminders, a "this week" widget and frost alerts.
+Today Plantr works on iPhone as a home-screen web app (Safari → Share → Add to Home Screen) with sign-in codes. A native app would add push notifications, widgets and better camera access. The cheapest path is a Capacitor shell around the site, built by GitHub Actions on a macOS runner (or Codemagic). That build can be sideloaded (it needs re-signing every 7 days with a free Apple ID) or sent through TestFlight with a $99/year Apple Developer account. For the App Store, Apple rejects thin website wrappers (guideline 4.2), so ship it with real native features: push reminders, a "this week" widget and frost alerts.
+
+Before submitting to the App Store:
+
+- **A final name.** "Plantr" collides with an existing App Store app; see the name notes below. The bundle ID (e.g. `com.<domain>.app`) follows from the domain.
+- **Block users.** Apps with user-generated content need reporting (built), moderation (built), published contact info and a way to block abusive users (guideline 1.2). Blocking is still to build.
+- **A reviewer sign-in.** App Review needs a working demo account, and email codes need an inbox. Add a reviewer email whose code is set in an environment variable.
+- **Push notifications** for the weekly to-do list and frost alerts (APNs via the Capacitor push plugin), plus the native camera and share sheet.
+- **Store listing:** privacy policy URL (`/privacy`), App Privacy answers (email, photos, usage data), support URL, screenshots, a 1024 px icon and the age-rating questionnaire. Account deletion is already built.
+- **Payments:** affiliate purchases are physical goods, so they're fine outside Apple's in-app purchase. A Pro subscription would be digital: in the U.S. storefront apps may currently link out to web checkout with no Apple commission (under appeal in Epic v. Apple), elsewhere it needs in-app purchase. Check the rules again when Pro launches.
+- **Android:** the same Capacitor project builds for Google Play ($25 once). New personal developer accounts must run a closed test with at least 12 testers for 14 days before going public.
+
+## Name and domains
+
+Checked October 8, 2026 (domains by RDAP, App Store by Apple's search API). "Free" means unregistered: confirm the price at a registrar (some are premium) and run a USPTO trademark search before committing.
+
+| Name | Domains free | App Store |
+| --- | --- | --- |
+| **SowCue** | .com, .app, .co, .garden | No results |
+| **Grow My Plot** | .com, .app, .co, .garden | No close match |
+| **Sprig & Sow** (sprigandsow) | .com, .app | No close match |
+| Basil Buddy | .com, .app | No close match |
+| Kale Pal | .com, .app | No close match |
+| Plot Folk | .app, .co, .garden | No close match |
+| Lil Plot | .com, .app | Close: "LittlePlotter", "Little Plot, Big Plans" |
+| Plantr (today) | plantr.co, useplantr.com, getplantr.app | Taken: "Plantr - Plant Identifier app" (also "Planter", "Planta") |
+
+Taken on both .com and .app: Sproutly, Sowly, Seedwise, Gardenwise, PlotPal, Yardly, Greenprint, GardenPal, Rootwise, Gardenly, PlantPal, GardenBuddy, GardenMate, Plotwise, Tendril, Thymeline, PocketPlot, TinyPlot, Plotsy, Sprouty, Furrow, Plotlings and others. "Lettuce Plan" (.app free) is already the name of an App Store app.
 
 ## Monetization: affiliate links
 
-- Shopping-list items already have stable ids (`plant:tomato`, `supply:cages`, `soil:raised-mix`, ...). Map them to merchant products in a **separate** table, keeping horticultural data and merchant data apart.
-- Add "Buy" links, click tracking and an FTC affiliate disclosure on the shopping list.
-- Apply to programs once the site is live with real users. Amazon Associates closes accounts without qualifying sales soon after joining, so time that application for when traffic exists. Garden brands (seeds, planters, raised beds, grow bags) often run programs on affiliate networks that also review the live site.
-- Hosting: Vercel's free Hobby plan is for non-commercial use; move to Pro once affiliate links go live.
+**Built (October 2026):** store buttons on every shopping-list item (Amazon and Home Depot searches, best store first), affiliate tags from `AFFILIATE_AMAZON_TAG` and `AFFILIATE_HOME_DEPOT_TEMPLATE`, an FTC and Amazon disclosure while tags are set, `rel="sponsored"`, and anonymous click counts (`shop_clicks`, `npm run shop:clicks`). Merchant data lives in `src/lib/shop.ts`, apart from the plant data. See the README.
+
+Next:
+
+- **Apply when there's traffic.** Amazon gives new Associates 180 days to make 3 qualifying sales, or the application is closed, so apply once `npm run shop:clicks` shows steady clicks. Home Depot's program runs on Impact, which reviews the live site.
+- **Product picks for top items.** Once clicks show what people buy, link the most-clicked supplies (cages, grow bags, seed-starting kits, grow lights) to specific well-reviewed products instead of searches.
+- **A seed company** as the first store for seeds. Many run programs on Impact, ShareASale or AvantLink, and seed packets from a seed company beat marketplace listings on quality.
+- **Never in emails:** Amazon forbids affiliate links in email, so the weekly email links back to the plan instead.
+- **Hosting:** Vercel's free Hobby plan is for non-commercial use; move to Pro when affiliate links start earning.
 
 ## Full spec: not yet built
 

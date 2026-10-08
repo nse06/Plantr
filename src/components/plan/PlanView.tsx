@@ -9,6 +9,7 @@ import { todayISO } from "@/lib/garden/dates";
 import { seasonLabel } from "@/lib/garden/progress";
 import { useTaskDone } from "@/components/garden/tasks";
 import { Button, Chip, Spinner, buttonClass, cx } from "@/components/ui";
+import type { ShopConfig } from "@/lib/shop";
 import { CalendarTab, CareTab, LayoutTab, OverviewTab, PlantsTab, ShoppingTab } from "./sections";
 
 const TABS = [
@@ -29,9 +30,11 @@ export interface PlanViewProps {
   viewer: { signedIn: boolean; canEdit: boolean; isOwner: boolean };
   doneTaskIds: string[];
   serverToday: string;
+  /** Affiliate settings for the shopping list's store links. */
+  shop: ShopConfig;
 }
 
-export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday }: PlanViewProps) {
+export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday, shop }: PlanViewProps) {
   const router = useRouter();
   const params = useSearchParams();
   const [tab, setTab] = useState<TabId>("overview");
@@ -42,6 +45,7 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
   const saved = garden.status !== "draft" && viewer.isOwner;
   const tasks = useTaskDone(garden.id, doneTaskIds, saved);
   const autoSaveTried = useRef(false);
+  const tabsRef = useRef<HTMLElement>(null);
 
   const selectTab = useCallback((id: string) => {
     if (!TABS.some((t) => t.id === id)) return;
@@ -64,6 +68,13 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
     window.addEventListener("hashchange", fromHash);
     return () => window.removeEventListener("hashchange", fromHash);
   }, [serverToday]);
+
+  useEffect(() => {
+    // On phones the tab bar scrolls sideways: keep the selected tab in view (e.g. arriving at #shopping).
+    const nav = tabsRef.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (nav && active) nav.scrollTo({ left: active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2, behavior: "smooth" });
+  }, [tab]);
 
   const save = useCallback(async () => {
     if (!viewer.signedIn) {
@@ -146,7 +157,7 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
 
       {/* Tabs */}
       <div className="sticky top-16 z-20 -mx-4 mt-6 border-b border-line bg-cream/90 px-4 backdrop-blur-md no-print">
-        <nav className="no-scrollbar flex gap-1 overflow-x-auto py-2" aria-label="Plan sections">
+        <nav ref={tabsRef} className="no-scrollbar relative flex gap-1 overflow-x-auto py-2" aria-label="Plan sections">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -170,7 +181,7 @@ export function PlanView({ garden, input, plan, viewer, doneTaskIds, serverToday
         {tab === "layout" && <LayoutTab plan={plan} input={input} />}
         {tab === "plants" && <PlantsTab plan={plan} input={input} />}
         {tab === "calendar" && <CalendarTab plan={plan} today={today} tasks={{ done: tasks.done, toggle: saved ? tasks.toggle : undefined }} />}
-        {tab === "shopping" && <ShoppingTab plan={plan} gardenId={garden.id} />}
+        {tab === "shopping" && <ShoppingTab plan={plan} gardenId={garden.id} shop={shop} />}
         {tab === "care" && <CareTab plan={plan} input={input} />}
       </div>
       {tasks.error && <p className="mt-4 text-sm text-clay-700">{tasks.error}</p>}

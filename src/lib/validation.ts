@@ -147,3 +147,8 @@ export const moderationSchema = z.object({
   id: z.string().regex(/^[A-Za-z0-9]{6,32}$/),
   action: z.enum(["keep", "remove"]),
 });
+
+export const shopClickSchema = z.object({
+  merchant: z.enum(["amazon", "homedepot"]),
+  item: z.string().min(1).max(80),
+});

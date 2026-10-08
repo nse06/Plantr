@@ -200,6 +200,21 @@ export const aiCache = sqliteTable("ai_cache", {
   createdAt: text("created_at").notNull(),
 });
 
+/** Taps on shopping-list store links: which item and which store, never who tapped. */
+export const shopClicks = sqliteTable(
+  "shop_clicks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    merchant: text("merchant").notNull(),
+    /** Shopping item id, e.g. plant:tomato or supply:cages ("pots" for any pot line). */
+    item: text("item").notNull(),
+    /** The link carried an affiliate tag at the time, so the tap could earn a commission. */
+    affiliate: integer("affiliate", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("shop_clicks_created_idx").on(t.createdAt)],
+);
+
 export type User = typeof users.$inferSelect;
 export type GardenPhoto = typeof gardenPhotos.$inferSelect;
 export type Garden = typeof gardens.$inferSelect;

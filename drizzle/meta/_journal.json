@@ -22,6 +22,13 @@
       "when": 1791436128530,
       "tag": "0002_sharing_and_signin_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791481497226,
+      "tag": "0003_shop_clicks",
+      "breakpoints": true
     }
   ]
 }

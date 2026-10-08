@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getCurrentUser, getGuestId } from "@/lib/server/auth";
 import { canEdit, doneTaskIds, getGarden } from "@/lib/server/gardens";
+import { shopConfig } from "@/lib/server/shop";
 import { todayISO } from "@/lib/garden/dates";
 import { PlanView } from "@/components/plan/PlanView";
 
@@ -39,6 +40,7 @@ export default async function PlanPage({ params }: Props) {
         viewer={{ signedIn: Boolean(user), canEdit: editable, isOwner }}
         doneTaskIds={done}
         serverToday={todayISO()}
+        shop={shopConfig()}
       />
     </Suspense>
   );

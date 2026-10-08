@@ -57,6 +57,19 @@ Sharing is off until a gardener turns it on for a garden ("Share on your profile
 - **Cheers and reports:** signed-in visitors can cheer a garden (one per person), and the weekly email tells the owner about the week's new cheers, naming cheerers who have public profiles; a week with new cheers gets an email even if there's nothing to do. Anyone can report a garden or photo; three distinct reports hide it until an admin keeps or removes it at `/admin` (admins are listed in `ADMIN_EMAILS`).
 - **Privacy:** public pages show the state and growing zone, never the ZIP code or email address.
 
+### Shopping list store links
+
+Each item on the shopping list has buttons that search Amazon and Home Depot for it. The better store for that kind of item comes first: Home Depot for nursery plants and bagged soil (local stock and in-store pickup), Amazon for seeds and supplies. Links are store searches rather than product pages, so they never go stale and work for any variety. Green onions regrown from grocery-store scraps get no links, and the buttons hide once an item is checked off and when printing.
+
+To earn commissions, set either or both of these (see [Environment variables](#environment-variables)):
+
+- `AFFILIATE_AMAZON_TAG`: your Amazon Associates tracking ID, such as `plantr-20`. It's added to every Amazon link.
+- `AFFILIATE_HOME_DEPOT_TEMPLATE`: your Home Depot affiliate deep link from Impact, with `{url}` where the store URL goes, such as `https://homedepot.sjv.io/c/<id>/<ad>/<campaign>?u={url}`.
+
+While either is set, the shopping list shows an affiliate disclosure (plus Amazon's required "As an Amazon Associate…" line when the Amazon tag is set) and the links are marked `rel="sponsored"`. A malformed value is ignored with a server warning, so links never break. Store links never go in emails, because Amazon forbids that.
+
+Taps are counted in the `shop_clicks` table: the store, the item and whether the link was tagged, never the user, garden or IP address. `npm run shop:clicks` reports the last 7 and 30 days. Clicks aren't sales: each program's own dashboard reports orders and commissions.
+
 ### On iPhone
 
 Plantr is a website, so there's nothing to install from an app store or sideload. Open it in Safari, tap **Share → Add to Home Screen**, and it opens full screen like an app. Sign-in emails include a 6-digit code as well as a link, because a home-screen web app keeps its own cookies apart from Safari (tapping the emailed link would sign in Safari, not the app).
@@ -112,7 +125,7 @@ src/
     api/                   climate, photo, plans, gardens/[id]/{save,tasks,journal,ask,
                            photos,share,cheer}, photos/[id], profile, reports,
                            admin/reports, auth/{request,verify,code,logout}, account,
-                           cron/weekly-digest, digest/unsubscribe
+                           shop/click, cron/weekly-digest, digest/unsubscribe
   components/              UI: design system, wizard, plan view, garden home, visuals,
                            social (photos, sharing, cheers, reports, profiles)
   lib/garden/              The planting engine (pure, shared by server and browser)
@@ -125,15 +138,17 @@ src/
     tasks.ts, shopping.ts  Dated task list and priced shopping list
     plan.ts                buildPlan(): ties it all together
     data/                  Bundled NOAA station and ZIP data (server-only)
+  lib/shop.ts              Shopping-list store links: search terms, stores, affiliate tags
   lib/ai/                  Claude integrations: photo.ts, design.ts, ask.ts, plus
                            client.ts (per-feature settings), pricing.ts, usage.ts
                            (usage log, daily budget, result cache)
   lib/server/              Auth, sessions, gardens data access, sharing (social.ts),
                            JPEG checks, rate limiting, email, weekly digest, climate
-                           lookup, plan generation
+                           lookup, plan generation, affiliate settings and click counts
   db/                      Drizzle schema and client
 drizzle/                   SQL migrations
-scripts/                   migrate.ts, build_climate_data.py, ai-usage.ts, ai-sweep.ts
+scripts/                   migrate.ts, build_climate_data.py, ai-usage.ts, ai-sweep.ts,
+                           shop-clicks.ts
 ```
 
 ---
@@ -169,6 +184,8 @@ npm run build        # production build
 | `RESEND_API_KEY`, `EMAIL_FROM` | Production | Sign-in links and the weekly digest. Use a verified sending domain. |
 | `CRON_SECRET` | Production | Vercel Cron sends it to `/api/cron/weekly-digest`. |
 | `ADMIN_EMAILS` | Optional | Comma-separated emails that can review reports at `/admin`. |
+| `AFFILIATE_AMAZON_TAG` | Optional | Amazon Associates tracking ID added to shopping-list links. See [store links](#shopping-list-store-links). |
+| `AFFILIATE_HOME_DEPOT_TEMPLATE` | Optional | Home Depot (Impact) deep link with `{url}` where the store URL goes. |
 
 ## Deploying (Vercel + Turso + Resend)
 
@@ -186,6 +203,7 @@ The plan and photo endpoints set `maxDuration = 120`. AI design typically takes 
 - Shared content is opt-in. Uploaded photos are checked to be JPEGs and stripped of metadata (including GPS), public pages never show ZIP codes or emails, and reported content is hidden after three distinct reports until an admin reviews it.
 - All input is validated with Zod, mutating endpoints check the `Origin` header, and redirects are restricted to in-app paths.
 - Database-backed rate limits protect the AI and email endpoints (per IP, per email, per user).
+- Store links go straight to the store, which sees only the site's origin as the referrer (never the private plan URL). Click counts record the store and item only.
 - Only a small photo thumbnail is stored. AI results (never photos) are cached for up to 30 days under a one-way hash of the request. Users can delete their account and all data from the account page. Every digest email has a signed one-click unsubscribe (RFC 8058).
 
 ## Operating cost
@@ -221,7 +239,7 @@ The sweep prints tokens, cost and latency per setting, then the plans side by si
 
 ## Testing
 
-`npm test` runs the test suite. It covers dates, frost-date math, scheduling across real climates (Seattle, Chicago, Denver, Phoenix, Miami, Austin), layout packing, recommendations, indoor light, pots, pets and calendars, the AI prompt, cost estimates and settings, request validation, digest rendering and signed links. The sharing and sign-in tests run the real data layer against a throwaway SQLite database: codes, profiles, visibility, photo metadata stripping, cheers, reports, moderation and account deletion.
+`npm test` runs the test suite. It covers dates, frost-date math, scheduling across real climates (Seattle, Chicago, Denver, Phoenix, Miami, Austin), layout packing, recommendations, indoor light, pots, pets and calendars, the AI prompt, cost estimates and settings, request validation, digest rendering, signed links, and the shopping list's store searches and affiliate links. The sharing and sign-in tests run the real data layer against a throwaway SQLite database: codes, profiles, visibility, photo metadata stripping, cheers, reports, moderation, account deletion and store-link click counts.
 
 ## Roadmap ideas
 

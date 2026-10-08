@@ -24,6 +24,12 @@ export default function PrivacyPage() {
           or delete a photo anytime, and anyone can report something that shouldn&apos;t be there.
         </p>
         <p>
+          <strong className="text-ink">Shopping links.</strong> The store buttons on your shopping list open a search on that store&apos;s
+          website. Some are affiliate links: if you buy something, Plantr may earn a small commission at no extra cost to you. We count
+          which items and stores get tapped, never who tapped them. The store sees a search for that item, not your plan or account. Once
+          you&apos;re on a store&apos;s site, its own privacy policy applies.
+        </p>
+        <p>
           <strong className="text-ink">Your account.</strong> We store your email address to sign you in and, if you keep it on, to send one weekly
           garden email. Every email has a one-click unsubscribe link.
         </p>

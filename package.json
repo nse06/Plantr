@@ -15,6 +15,7 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "ai:usage": "tsx scripts/ai-usage.ts",
     "ai:sweep": "tsx scripts/ai-sweep.ts",
+    "shop:clicks": "tsx scripts/shop-clicks.ts",
     "data:climate": "python3 -I scripts/build_climate_data.py"
   },
   "dependencies": {

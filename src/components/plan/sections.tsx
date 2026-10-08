@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowUpRight,
   CalendarDays,
   Check,
   ClipboardCopy,
@@ -23,6 +24,7 @@ import { BedGrid, ContainerGrid, PlantBadge, SeasonTimeline, WindowsillView, pla
 import { INDOOR_WEEKS, WINDOW_LABELS, isIndoor, potInchesForGallons } from "@/lib/garden/indoor";
 import { TaskItem } from "@/components/garden/tasks";
 import { Card, Chip, Stat, cx } from "@/components/ui";
+import { type MerchantId, type ShopConfig, earnsCommission, shopLinks } from "@/lib/shop";
 
 type TaskState = { done: Set<string>; toggle?: (id: string) => void };
 
@@ -467,7 +469,16 @@ export function CalendarTab({ plan, today, tasks }: { plan: GardenPlan; today: s
 // Shopping
 // ---------------------------------------------------------------------------
 
-export function ShoppingTab({ plan, gardenId }: { plan: GardenPlan; gardenId: string }) {
+/** Counts a tap on a store link without delaying it: a beacon survives the page opening a new tab. */
+function countShopClick(merchant: MerchantId, item: string) {
+  const body = JSON.stringify({ merchant, item });
+  try {
+    if (navigator.sendBeacon?.("/api/shop/click", new Blob([body], { type: "application/json" }))) return;
+  } catch {}
+  void fetch("/api/shop/click", { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+}
+
+export function ShoppingTab({ plan, gardenId, shop }: { plan: GardenPlan; gardenId: string; shop: ShopConfig }) {
   const key = `plantr:shop:${gardenId}`;
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
@@ -516,6 +527,15 @@ export function ShoppingTab({ plan, gardenId }: { plan: GardenPlan; gardenId: st
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
       <div className="space-y-5">
+        {earnsCommission(shop) && (
+          <p className="flex gap-2 rounded-2xl bg-paper px-3.5 py-2.5 text-[13px] leading-snug text-muted ring-1 ring-line no-print">
+            <Info className="mt-px h-4 w-4 shrink-0 text-leaf-600" aria-hidden />
+            <span>
+              Plantr may earn a small commission when you buy through these store links, at no extra cost to you.
+              {shop.amazonTag ? " As an Amazon Associate, Plantr earns from qualifying purchases." : ""}
+            </span>
+          </p>
+        )}
         {groups.map((g) => {
           const items = plan.shopping.filter((i) => i.group === g);
           if (!items.length) return null;
@@ -525,9 +545,10 @@ export function ShoppingTab({ plan, gardenId }: { plan: GardenPlan; gardenId: st
               <ul className="divide-y divide-line">
                 {items.map((i) => {
                   const on = checked.has(i.id);
+                  const links = on ? [] : shopLinks(i, shop);
                   return (
                     <li key={i.id}>
-                      <label className="flex cursor-pointer items-start gap-3 py-3">
+                      <label className={cx("flex cursor-pointer items-start gap-3 pt-3", links.length ? "pb-2" : "pb-3")}>
                         <input
                           type="checkbox"
                           checked={on}
@@ -543,6 +564,24 @@ export function ShoppingTab({ plan, gardenId }: { plan: GardenPlan; gardenId: st
                           <span className="block text-xs text-faint">~{money(i.estCost)}</span>
                         </span>
                       </label>
+                      {links.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pb-3 pl-8 no-print">
+                          {links.map((l) => (
+                            <a
+                              key={l.merchant}
+                              href={l.url}
+                              target="_blank"
+                              rel={l.affiliate ? "sponsored noopener" : "nofollow noopener"}
+                              onClick={() => countShopClick(l.merchant, i.id)}
+                              aria-label={`Find ${i.name} at ${l.name} (opens in a new tab)`}
+                              className="inline-flex h-8 items-center gap-1 rounded-full border border-line-strong bg-paper px-3 text-[13px] font-semibold text-leaf-700 transition-colors hover:border-leaf-500 hover:bg-leaf-50"
+                            >
+                              {l.name}
+                              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </li>
                   );
                 })}
