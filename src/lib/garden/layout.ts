@@ -80,10 +80,24 @@ export function cellsNeeded(plant: Plant, quantity: number): number {
   return quantity * Math.round(1 / plant.perSqFt);
 }
 
+/**
+ * Soil surface of a typical pot of this size, in square feet. Garden pots and grow bags are
+ * roughly as tall as they are wide (a 5-gallon pot is about 12 inches across).
+ */
+export function potSurfaceSqFt(gallons: number): number {
+  const diameterIn = Math.cbrt((4 * gallons * 231) / (0.85 * Math.PI));
+  return (Math.PI * diameterIn * diameterIn) / 4 / 144;
+}
+
 /** How many plants of this kind fit in one pot of the given size (0 = pot too small). */
 export function plantsPerPot(plant: Plant, gallons: number): number {
   if (!plant.pot || gallons < plant.pot.gal) return 0;
-  return plant.pot.plants * Math.max(1, Math.floor(gallons / plant.pot.gal));
+  const byVolume = plant.pot.plants * Math.max(1, Math.floor(gallons / plant.pot.gal));
+  // Dense square-foot crops (greens, roots, herbs, beans) are limited by the soil surface,
+  // not the volume: a 5-gallon pot has room for about 7 arugula plants, not 30.
+  if (plant.perSqFt < 2) return byVolume;
+  const bySurface = Math.round(plant.perSqFt * potSurfaceSqFt(gallons));
+  return Math.min(byVolume, Math.max(plant.pot.plants, bySurface));
 }
 
 function fits(grid: Grid, c: number, r: number, w: number, h: number): boolean {

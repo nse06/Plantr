@@ -4,7 +4,7 @@ import { buildClimate, frostDatesForZone, lookupZip3, parseZone } from "./climat
 import { addDays, diffDays, fmtShort, nextSaturday, startOfWeek } from "./dates";
 import { computeSchedule, seasonContext, seasonOptions } from "./schedule";
 import { getPlant, PLANTS, PLANT_ABBR, PLANT_COLORS } from "./plants";
-import { cellsNeeded, layoutGarden, plantableSqFt } from "./layout";
+import { cellsNeeded, layoutGarden, plantableSqFt, plantsPerPot, potSurfaceSqFt } from "./layout";
 import { designWithRules, evaluateCatalog, plantsFromNotes } from "./recommend";
 import { buildPlan, planContext } from "./plan";
 
@@ -149,6 +149,35 @@ describe("layout", () => {
   it("never places more than fits", () => {
     const { placed } = layoutGarden([bed(2, 2)], [{ plantId: "winter-squash", quantity: 3 }]);
     expect(placed["winter-squash"]).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("containers", () => {
+  it("sizes dense crops by the pot's soil surface, not its volume", () => {
+    // A 5-gallon pot is about 12 inches across: roughly 0.8 sq ft of soil.
+    expect(potSurfaceSqFt(5)).toBeCloseTo(0.79, 1);
+    expect(plantsPerPot(getPlant("arugula"), 5)).toBeLessThanOrEqual(9);
+    expect(plantsPerPot(getPlant("radish"), 5)).toBeLessThanOrEqual(16);
+    expect(plantsPerPot(getPlant("scallions"), 10)).toBeLessThanOrEqual(26);
+    expect(plantsPerPot(getPlant("basil"), 5)).toBe(3);
+    // The minimum pot still holds its listed count, and big plants are unchanged.
+    expect(plantsPerPot(getPlant("lettuce"), 2)).toBe(2);
+    expect(plantsPerPot(getPlant("tomato"), 10)).toBe(1);
+    expect(plantsPerPot(getPlant("tomato"), 5)).toBe(0);
+  });
+
+  it("gives a small container garden variety before quantity", () => {
+    const input = makeInput({
+      spaceType: "containers",
+      areas: [{ kind: "containers", id: "c1", name: "Pots", count: 6, gallons: 5 }],
+      goals: ["herbs", "salad"],
+      sun: "partial",
+    });
+    const { ctx, evaluation } = planContext(input, "2026-10-07");
+    const plan = buildPlan(input, designWithRules(input, evaluation, ctx), "2026-10-07");
+    const pots = plan.layouts[0].kind === "containers" ? plan.layouts[0].pots : [];
+    expect(new Set(pots.map((p) => p.plantId)).size).toBeGreaterThanOrEqual(5);
+    expect(pots.every((p) => p.count <= 13)).toBe(true);
   });
 });
 

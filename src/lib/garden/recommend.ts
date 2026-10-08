@@ -260,9 +260,11 @@ function score(c: Candidate, input: PlanInput, wanted: Set<string>, implied: Set
     if (input.sun === "partial") s += p.sun === "partial" ? 5 : -14;
     if (input.sun === "shade") s += p.category === "herb" || p.sun === "partial" ? 4 : -10;
   }
-  // Space hogs need to earn their place in small gardens.
+  // Space hogs need to earn their place in small gardens. In pots, judge a crop by its smallest
+  // planting (one pot): dense crops can always shrink to fit, big plants can't.
   const cap = capacityUnits(input);
-  const units = spaceUnits(p, defaultQuantity(p, input), input);
+  const potsOnly = !input.areas.some((a) => a.kind === "bed");
+  const units = spaceUnits(p, potsOnly ? roundToPots(p, minimumQuantity(p), input) : defaultQuantity(p, input), input);
   if (cap > 0 && units / cap > 0.35 && !wanted.has(p.id)) s -= 15;
   if (c.warnings.length && !wanted.has(p.id)) s -= 3;
   return s;
@@ -364,6 +366,7 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
 
   const capacity = capacityUnits(input);
   const target = targetCropCount(input);
+  const potsOnly = !input.areas.some((a) => a.kind === "bed");
   // Windowsill gardens are mostly herbs, and that's fine.
   const herbCap =
     indoor || (input.goals.length === 1 && input.goals[0] === "herbs") ? target : Math.max(2, Math.ceil(target / 3));
@@ -385,6 +388,9 @@ export function designWithRules(input: PlanInput, evaluation: CatalogEvaluation,
       if (p.category === "herb" && chosen.filter((x) => x.plant.category === "herb").length >= herbCap) return false;
     }
     let qty = roundToPots(p, defaultQuantity(p, input), input);
+    // In pots, start each crop with a fair share (one pot in a small garden, two once there are
+    // 10 or more) so one crop can't crowd out the rest; growing to fill comes after.
+    if (potsOnly) qty = Math.min(qty, Math.max(1, perPot(p, input)) * Math.max(1, Math.floor(capacity / 5)));
     const left = capacity - used;
     const min = minimumQuantity(p);
     while (qty > min && spaceUnits(p, qty, input) > left) {
