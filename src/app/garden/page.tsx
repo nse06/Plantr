@@ -39,6 +39,9 @@ export default async function GardenDashboard() {
         <div>
           <p className="text-sm font-semibold text-leaf-700">Welcome back 🌤️</p>
           <h1 className="font-display text-4xl font-semibold">My Garden</h1>
+          <Link href="/explore" className="mt-1 inline-block text-sm font-semibold text-leaf-700 hover:underline">
+            See what other gardeners are growing →
+          </Link>
         </div>
         <ButtonLink href="/plan/new" variant="secondary">
           <Plus className="h-4 w-4" /> New plan

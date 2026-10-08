@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   description:
     "Snap a photo of your space, tell us what you want to grow, and Plantr tells you exactly what to plant, where to put it, and when to do it.",
   applicationName: "Plantr",
+  // "Add to Home Screen" on iPhone opens Plantr full-screen, like an installed app.
+  appleWebApp: { capable: true, title: "Plantr", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
   openGraph: {
     title: "Plantr: your garden, planned",
     description: "A personalized garden plan in minutes: layout, planting calendar, shopping list and weekly reminders.",
@@ -46,6 +49,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Logo />
             </Link>
             <nav className="flex items-center gap-1.5 sm:gap-3">
+              {/* Wider screens only: the phone header has room for two buttons. */}
+              <span className="hidden sm:block">
+                <Link href="/explore" className={buttonClass("ghost", "sm")}>
+                  Explore
+                </Link>
+              </span>
               {user ? (
                 <Link href="/garden" className={buttonClass("ghost", "sm")}>
                   My Garden
@@ -74,6 +83,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="flex flex-wrap gap-x-5 gap-y-2">
                 <Link href="/plan/new" className="hover:text-ink">
                   Plan a garden
+                </Link>
+                <Link href="/explore" className="hover:text-ink">
+                  Explore gardens
                 </Link>
                 {user ? (
                   <Link href="/account" className="hover:text-ink">

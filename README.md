@@ -8,7 +8,7 @@ Plantr is a consumer web app that helps beginner and casual U.S. gardeners desig
 | --- | --- |
 | **1. Garden planner**: the "wow" | A 2-minute, five-step wizard: photo of the space (AI estimates size and sun), ZIP code (local frost dates and temperatures), goals and favorite plants, a quick confirmation of the space, and a little about the household. |
 | **2. Garden plan**: the useful output | Bed-by-bed **layout** (square-foot grid, tall crops on the north side), **plant list** with varieties, quantities and spacing, a **planting calendar** with seed-starting, planting and harvest windows, a dated **task list**, a **maintenance schedule**, a priced **shopping list**, and the **reasoning** behind every choice (including what was left out and why). |
-| **3. My Garden**: retention | Save the plan to get a **weekly email** of exactly what to do, a **"This week"** checklist, plant stages, a **harvest log and notes**, **Ask Plantr** (answers that know your zone, plants and calendar), and a nudge to plan the next season when this one wraps up. |
+| **3. My Garden**: retention | Save the plan to get a **weekly email** of exactly what to do, a **"This week"** checklist, plant stages, a **harvest log and notes**, a **photo diary**, **Ask Plantr** (answers that know your zone, plants and calendar), and a nudge to plan the next season when this one wraps up. Gardeners can **share a garden on a public profile**, where others can cheer it and plan one like it. |
 
 ---
 
@@ -47,6 +47,20 @@ Choose **Indoors** in the wizard (or start from `/plan/new?space=indoor`). Light
 - **Pets:** with cats or dogs at home, plants on the ASPCA toxic list (chives, green onions, mint, oregano, parsley, tomato leaves) are left out unless the person asks for them, and then they get a warning.
 - **Everything else follows:** a windowsill layout view, indoor tasks (pots and saucers, grow-light timer, hand-pollinating, fungus gnats), an indoor shopping list, indoor care advice, and photo analysis that estimates sill length and how many pots fit.
 
+### Sharing gardens
+
+Sharing is off until a gardener turns it on for a garden ("Share on your profile" on the garden page).
+
+- **Pages:** a public garden page (`/g/[id]`) with photos, layout, crops and progress; a profile (`/u/[handle]`) listing someone's shared gardens; and **Explore** (`/explore`), the most recently active shared gardens. Every public garden ends with "Plan my garden", which starts the wizard with the same goals.
+- **Photos:** owners post photo updates from the garden page. The browser resizes them (1280 px, plus a 720 px thumbnail), and the server checks they're real JPEGs and strips metadata (EXIF, including GPS location) before storing them in the database, up to 60 per garden.
+- **Profiles:** a handle is created the first time someone shares (a random one like `leafy-radish-27`, never derived from their email), and can be changed on the account page along with a display name and short bio.
+- **Cheers and reports:** signed-in visitors can cheer a garden (one per person). Anyone can report a garden or photo; three distinct reports hide it until an admin keeps or removes it at `/admin` (admins are listed in `ADMIN_EMAILS`).
+- **Privacy:** public pages show the state and growing zone, never the ZIP code or email address.
+
+### On iPhone
+
+Plantr is a website, so there's nothing to install from an app store or sideload. Open it in Safari, tap **Share → Add to Home Screen**, and it opens full screen like an app. Sign-in emails include a 6-digit code as well as a link, because a home-screen web app keeps its own cookies apart from Safari (tapping the emailed link would sign in Safari, not the app).
+
 ### Climate data
 
 Every date depends on local climate, so Plantr bundles real data instead of guessing from the hardiness zone alone:
@@ -77,10 +91,10 @@ Regenerate the data with `npm run data:climate` (see `scripts/build_climate_data
 | **Tailwind CSS v4** | Fast to build a polished, consistent, mobile-first UI with a small design system (`src/app/globals.css`, `src/components/ui.tsx`). |
 | **Drizzle ORM + libSQL** | A local SQLite file with zero setup in development; [Turso](https://turso.tech) (hosted libSQL) in production for pennies, with typed queries and SQL migrations. |
 | **Anthropic Claude** (`@anthropic-ai/sdk`) | Vision for photo analysis, structured outputs for garden design, short answers for Ask Plantr. Server-side refusal fallbacks are enabled. |
-| **Passwordless email sign-in** (built in) + **Resend** | No passwords to manage; magic links via a plain HTTP call; emails print to the console in development. |
+| **Passwordless email sign-in** (built in) + **Resend** | No passwords to manage; a one-time link and a 6-digit code in each email, sent with a plain HTTP call; emails print to the console in development. |
 | **Vercel** (+ Vercel Cron) | Zero-config hosting for Next.js; a weekly cron sends the digest. |
 
-There are no other services: no queue, no object storage (only a small photo thumbnail is kept), and no separate backend.
+There are no other services: no queue, no object storage (shared photos live in the database, which is fine for thousands of photos; see the backlog for when to move them), and no separate backend.
 
 ## Project structure
 
@@ -91,12 +105,16 @@ src/
     plan/new/              The wizard
     plan/[id]/             Plan view: overview, layout, plants, calendar, shopping, care
     garden/                My Garden dashboard and per-garden home
+    explore, u/[handle], g/[id]   Shared gardens: Explore, profiles, public garden pages
+    admin/                 Moderation of reported gardens and photos
     login, auth/verify     Passwordless sign-in
     account, privacy, unsubscribed
-    api/                   climate, photo, plans, gardens/[id]/{save,tasks,journal,ask},
-                           auth/{request,verify,logout}, account, cron/weekly-digest,
-                           digest/unsubscribe
-  components/              UI: design system, wizard, plan view, garden home, visuals
+    api/                   climate, photo, plans, gardens/[id]/{save,tasks,journal,ask,
+                           photos,share,cheer}, photos/[id], profile, reports,
+                           admin/reports, auth/{request,verify,code,logout}, account,
+                           cron/weekly-digest, digest/unsubscribe
+  components/              UI: design system, wizard, plan view, garden home, visuals,
+                           social (photos, sharing, cheers, reports, profiles)
   lib/garden/              The planting engine (pure, shared by server and browser)
     plants.ts              Plant catalog
     climate.ts, temps.ts   Climate helpers, temperature interpolation
@@ -110,8 +128,9 @@ src/
   lib/ai/                  Claude integrations: photo.ts, design.ts, ask.ts, plus
                            client.ts (per-feature settings), pricing.ts, usage.ts
                            (usage log, daily budget, result cache)
-  lib/server/              Auth, sessions, gardens data access, rate limiting, email,
-                           weekly digest, climate lookup, plan generation
+  lib/server/              Auth, sessions, gardens data access, sharing (social.ts),
+                           JPEG checks, rate limiting, email, weekly digest, climate
+                           lookup, plan generation
   db/                      Drizzle schema and client
 drizzle/                   SQL migrations
 scripts/                   migrate.ts, build_climate_data.py, ai-usage.ts, ai-sweep.ts
@@ -149,6 +168,7 @@ npm run build        # production build
 | `APP_URL` | Production | Public URL used in emailed links. Never derived from request headers in production. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Production | Sign-in links and the weekly digest. Use a verified sending domain. |
 | `CRON_SECRET` | Production | Vercel Cron sends it to `/api/cron/weekly-digest`. |
+| `ADMIN_EMAILS` | Optional | Comma-separated emails that can review reports at `/admin`. |
 
 ## Deploying (Vercel + Turso + Resend)
 
@@ -162,7 +182,8 @@ The plan and photo endpoints set `maxDuration = 120`. AI design typically takes 
 ## Security and privacy
 
 - Session and sign-in tokens are random and stored only as SHA-256 hashes. Cookies are `HttpOnly`, `SameSite=Lax` and `Secure` in production.
-- Sign-in links are one-time, expire after 30 minutes, and need a button tap, so email scanners that pre-fetch links can't use them up.
+- Sign-in links are one-time, expire after 30 minutes, and need a button tap, so email scanners that pre-fetch links can't use them up. The 6-digit code in the same email is stored as a signed hash, allows five wrong guesses, and is rate-limited per email and per IP.
+- Shared content is opt-in. Uploaded photos are checked to be JPEGs and stripped of metadata (including GPS), public pages never show ZIP codes or emails, and reported content is hidden after three distinct reports until an admin reviews it.
 - All input is validated with Zod, mutating endpoints check the `Origin` header, and redirects are restricted to in-app paths.
 - Database-backed rate limits protect the AI and email endpoints (per IP, per email, per user).
 - Only a small photo thumbnail is stored. AI results (never photos) are cached for up to 30 days under a one-way hash of the request. Users can delete their account and all data from the account page. Every digest email has a signed one-click unsubscribe (RFC 8058).
@@ -200,7 +221,7 @@ The sweep prints tokens, cost and latency per setting, then the plans side by si
 
 ## Testing
 
-`npm test` runs the test suite. It covers dates, frost-date math, scheduling across real climates (Seattle, Chicago, Denver, Phoenix, Miami, Austin), layout packing, recommendations, indoor light, pots, pets and calendars, the AI prompt, cost estimates and settings, request validation, digest rendering and signed links.
+`npm test` runs the test suite. It covers dates, frost-date math, scheduling across real climates (Seattle, Chicago, Denver, Phoenix, Miami, Austin), layout packing, recommendations, indoor light, pots, pets and calendars, the AI prompt, cost estimates and settings, request validation, digest rendering and signed links. The sharing and sign-in tests run the real data layer against a throwaway SQLite database: codes, profiles, visibility, photo metadata stripping, cheers, reports, moderation and account deletion.
 
 ## Roadmap ideas
 

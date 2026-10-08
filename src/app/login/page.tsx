@@ -29,7 +29,9 @@ export default async function LoginPage({ searchParams }: Props) {
         </div>
         {error && (
           <p className="mb-4 rounded-xl bg-clay-50 px-4 py-3 text-sm text-clay-700">
-            {error === "expired" ? "That sign-in link has expired or was already used. Request a new one below." : "That sign-in link isn't valid."}
+            {error === "expired"
+              ? "That sign-in link has expired or was already used. Request a new code below."
+              : "That sign-in link isn't valid."}
           </p>
         )}
         <LoginForm next={target} />

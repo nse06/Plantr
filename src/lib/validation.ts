@@ -115,3 +115,35 @@ export const journalSchema = z.object({
   unit: z.enum(["lb", "oz", "count", "bunch", "cup"]).nullable().optional(),
   note: z.string().trim().max(1000).nullable().optional(),
 });
+
+const jpegDataUrl = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .regex(/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/, "Upload a JPEG photo");
+
+export const photoUploadSchema = z.object({
+  image: jpegDataUrl(1_000_000),
+  thumb: jpegDataUrl(250_000),
+  caption: z.string().max(200).nullable().optional(),
+});
+
+export const shareSchema = z.object({ public: z.boolean() });
+
+export const profileSchema = z.object({
+  handle: z.string().max(40).optional(),
+  displayName: z.string().max(80).nullable().optional(),
+  bio: z.string().max(400).nullable().optional(),
+});
+
+export const reportSchema = z.object({
+  type: z.enum(["garden", "photo"]),
+  id: z.string().regex(/^[A-Za-z0-9]{6,32}$/),
+  reason: z.enum(["spam", "inappropriate", "personal-info", "other"]),
+});
+
+export const moderationSchema = z.object({
+  type: z.enum(["garden", "photo"]),
+  id: z.string().regex(/^[A-Za-z0-9]{6,32}$/),
+  action: z.enum(["keep", "remove"]),
+});

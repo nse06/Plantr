@@ -57,6 +57,24 @@ More ideas:
 
 What it takes to build: Stripe Checkout and the customer portal, a `subscriptions` table, a plan field on users, quota checks next to the existing rate limits, and feature flags so free and Pro share one codebase. A Pro user making about 30 AI calls a month costs roughly $1 in AI at current estimates, comfortably inside $4.99.
 
+## Sharing and community
+
+**Built (October 2026):** opt-in public profiles and garden pages, photo diaries, Explore, cheers, reports with automatic hiding, and an admin review page. See the README.
+
+Next ideas, roughly in order:
+
+- **Cheers in the weekly email:** "3 people cheered your salsa garden this week." Cheap, and it brings people back.
+- **Follow gardeners** and a "Following" tab in Explore; filter Explore by zone, indoor/outdoor and goal.
+- **Comments,** only once moderation is ready for them: report and delete, a word filter, and maybe comments limited to signed-in accounts older than a day.
+- **Automated image screening** on upload (a moderation API) before photo volume grows, plus blocking users.
+- **Photo storage:** photos live in the database today (about 250 KB each, so roughly 20,000 photos per 5 GB). Move them to object storage (Vercel Blob or Cloudflare R2) before that, keeping the same `/api/photos/[id]` URLs.
+- **Garden of the week** on the landing page, picked from the most-cheered gardens.
+- **"Plan one like this" attribution:** count how many plans each public garden inspires, and show it to the owner.
+
+## iPhone app
+
+Today Plantr works on iPhone as a home-screen web app (Safari → Share → Add to Home Screen) with sign-in codes. A native app would add push notifications, widgets and better camera access. The cheapest path is a Capacitor shell around the site, built by GitHub Actions on a macOS runner. That build can be sideloaded (it needs re-signing every 7 days with a free Apple ID) or sent through TestFlight with a $99/year Apple Developer account. For the App Store, Apple rejects thin website wrappers (guideline 4.2), so ship it with real native features: push reminders, a "this week" widget and frost alerts.
+
 ## Monetization: affiliate links
 
 - Shopping-list items already have stable ids (`plant:tomato`, `supply:cages`, `soil:raised-mix`, ...). Map them to merchant products in a **separate** table, keeping horticultural data and merchant data apart.

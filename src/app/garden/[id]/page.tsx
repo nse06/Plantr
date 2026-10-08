@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/server/auth";
 import { doneTaskIds, getGarden, listJournal } from "@/lib/server/gardens";
+import { listPhotos } from "@/lib/server/social";
 import { todayISO } from "@/lib/garden/dates";
 import { aiEnabled } from "@/lib/ai/client";
 import { GardenHome } from "@/components/garden/GardenHome";
@@ -24,7 +25,7 @@ export default async function GardenPage({ params, searchParams }: Props) {
   // Drafts live on the plan page until they're saved.
   if (garden.status === "draft") redirect(`/plan/${id}`);
 
-  const [done, journal] = await Promise.all([doneTaskIds([garden.id]), listJournal(garden.id)]);
+  const [done, journal, photos] = await Promise.all([doneTaskIds([garden.id]), listJournal(garden.id), listPhotos(garden.id, true)]);
   return (
     <GardenHome
       garden={{ id: garden.id, name: garden.name, photo: garden.photo, status: garden.status }}
@@ -35,6 +36,8 @@ export default async function GardenPage({ params, searchParams }: Props) {
       aiEnabled={aiEnabled()}
       serverToday={todayISO()}
       welcome={welcome === "1"}
+      photos={photos}
+      sharing={{ isPublic: garden.isPublic, hidden: garden.hidden, handle: user.handle }}
     />
   );
 }

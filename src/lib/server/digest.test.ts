@@ -39,12 +39,24 @@ function garden(today: string): Garden {
     input,
     plan,
     photo: null,
+    isPublic: false,
+    publishedAt: null,
+    hidden: false,
     createdAt: today,
     updatedAt: today,
   };
 }
 
-const user: User = { id: "u1", email: "a@example.com", digest: true, lastDigestAt: null, createdAt: "2026-10-01" };
+const user: User = {
+  id: "u1",
+  email: "a@example.com",
+  digest: true,
+  lastDigestAt: null,
+  handle: null,
+  displayName: null,
+  bio: null,
+  createdAt: "2026-10-01",
+};
 
 describe("weekly digest", () => {
   it("lists this week's tasks and skips quiet weeks", () => {

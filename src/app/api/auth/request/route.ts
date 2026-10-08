@@ -19,20 +19,21 @@ export async function POST(req: Request) {
   }
 
   const next = safeNext(parsed.data.next);
-  const token = await createLoginToken(email, next);
+  const { token, code } = await createLoginToken(email, next);
   const link = `${appUrl(req)}/auth/verify?token=${encodeURIComponent(token)}`;
   const sent = await sendEmail({
     to: email,
-    subject: "Your Plantr sign-in link",
-    text: `Tap the link below to sign in to Plantr. It expires in 30 minutes.\n\n${link}\n\nIf you didn't ask for this, you can ignore this email.`,
+    // The code in the subject lets phones offer it as a one-tap autofill.
+    subject: `${code} is your Plantr sign-in code`,
+    text: `Your Plantr sign-in code is ${code}\n\nEnter it in Plantr, or tap this link to sign in:\n${link}\n\nBoth expire in 30 minutes. If you didn't ask for this, you can ignore this email.`,
     html: emailLayout(
       "Sign in to Plantr",
-      `<p>Tap the button below to sign in. The link expires in 30 minutes.</p><p style="padding:12px 0">${buttonHtml(link, "Sign in to Plantr")}</p><p style="color:#6b7280;font-size:14px">If you didn't ask for this, you can safely ignore this email.</p>`,
+      `<p>Enter this code in Plantr:</p><p style="font-size:32px;font-weight:700;letter-spacing:6px;margin:8px 0 16px">${code}</p><p>Or tap the button to sign in on this device.</p><p style="padding:12px 0">${buttonHtml(link, "Sign in to Plantr")}</p><p style="color:#6b7280;font-size:14px">Both expire in 30 minutes. If you didn't ask for this, you can safely ignore this email.</p>`,
     ),
   });
   if (!sent) return error("We couldn't send the email. Please try again.", 502);
 
-  // Without an email provider configured (local development), hand the link back directly.
-  const devLink = !emailEnabled() && process.env.NODE_ENV !== "production" ? link : undefined;
-  return json({ ok: true, devLink });
+  // Without an email provider configured (local development), hand the link and code back directly.
+  const dev = !emailEnabled() && process.env.NODE_ENV !== "production";
+  return json({ ok: true, devLink: dev ? link : undefined, devCode: dev ? code : undefined });
 }

@@ -18,6 +18,12 @@ export default function PrivacyPage() {
           come back to it. Plan links are private and unguessable, but anyone you share a link with can view that plan.
         </p>
         <p>
+          <strong className="text-ink">Sharing your garden.</strong> Gardens are private unless you turn on sharing for one. A shared garden&apos;s
+          name, plants, layout, progress and the photos you add are visible to anyone, along with your profile name, state and growing zone. We
+          never show your ZIP code or email address. Photos are resized and stripped of location data before we store them. You can stop sharing
+          or delete a photo anytime, and anyone can report something that shouldn&apos;t be there.
+        </p>
+        <p>
           <strong className="text-ink">Your account.</strong> We store your email address to sign you in and, if you keep it on, to send one weekly
           garden email. Every email has a one-click unsubscribe link.
         </p>

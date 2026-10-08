@@ -1,8 +1,9 @@
+import { randomInt } from "node:crypto";
 import { cookies } from "next/headers";
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { User } from "@/db/schema";
-import { randomId, randomToken, sha256 } from "./crypto";
+import { randomId, randomToken, sha256, sign, verifySignature } from "./crypto";
 
 // Passwordless email sign-in. Session tokens are random and stored hashed, so a database
 // leak can't be replayed into live sessions.
@@ -11,6 +12,8 @@ export const SESSION_COOKIE = "plantr_session";
 export const GUEST_COOKIE = "plantr_guest";
 const SESSION_DAYS = 60;
 const LOGIN_TOKEN_MINUTES = 30;
+/** Wrong guesses allowed per emailed code. */
+const CODE_ATTEMPTS = 5;
 
 const secure = process.env.NODE_ENV === "production";
 
@@ -79,8 +82,16 @@ export function safeNext(next: string | null | undefined): string {
   return next;
 }
 
-export async function createLoginToken(email: string, next: string): Promise<string> {
+const codeKey = (email: string, code: string) => `login-code:${email}:${code}`;
+
+/**
+ * A sign-in email carries two ways in: a one-time link, and a 6-digit code for when the link
+ * would open somewhere else (an iPhone home-screen app keeps its own cookies apart from
+ * Safari, so a link from Mail signs in Safari, not the app).
+ */
+export async function createLoginToken(email: string, next: string): Promise<{ token: string; code: string }> {
   const token = randomToken();
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const now = Date.now();
   const db = getDb();
   // Housekeeping: expired tokens are useless.
@@ -89,10 +100,43 @@ export async function createLoginToken(email: string, next: string): Promise<str
     tokenHash: sha256(token),
     email,
     next,
+    codeHash: sign(codeKey(email, code)),
     expiresAt: now + LOGIN_TOKEN_MINUTES * 60_000,
     createdAt: now,
   });
-  return token;
+  return { token, code };
+}
+
+/**
+ * Sign in with the 6-digit code from a recent sign-in email. Each code allows a few wrong
+ * guesses before it stops working; using it also uses up the email's link.
+ */
+export async function consumeLoginCode(email: string, code: string): Promise<{ email: string; next: string } | null> {
+  const db = getDb();
+  const now = Date.now();
+  const t = schema.loginTokens;
+  const rows = await db
+    .select()
+    .from(t)
+    .where(and(eq(t.email, email), isNull(t.usedAt), gt(t.expiresAt, now), lt(t.attempts, CODE_ATTEMPTS)))
+    .orderBy(desc(t.createdAt))
+    .limit(5);
+  const match = rows.find((r) => r.codeHash && verifySignature(codeKey(email, code), r.codeHash));
+  if (!match) {
+    if (rows.length) {
+      await db
+        .update(t)
+        .set({ attempts: sql`${t.attempts} + 1` })
+        .where(inArray(t.tokenHash, rows.map((r) => r.tokenHash)));
+    }
+    return null;
+  }
+  const updated = await db
+    .update(t)
+    .set({ usedAt: now })
+    .where(and(eq(t.tokenHash, match.tokenHash), isNull(t.usedAt)))
+    .returning();
+  return updated[0] ? { email, next: safeNext(updated[0].next) } : null;
 }
 
 /** Consume a magic-link token. Returns the email and redirect target, or null if invalid. */

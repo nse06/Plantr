@@ -216,7 +216,13 @@ export default function Home() {
       <section className="border-y border-line bg-leaf-800 text-white">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <h2 className="font-display text-3xl font-semibold sm:text-4xl">Not sure where to start?</h2>
-          <p className="mt-2 max-w-xl text-leaf-100">Pick a garden that sounds fun. We&apos;ll tailor it to your space and climate.</p>
+          <p className="mt-2 max-w-xl text-leaf-100">
+            Pick a garden that sounds fun. We&apos;ll tailor it to your space and climate. Or{" "}
+            <Link href="/explore" className="font-semibold text-white underline underline-offset-4">
+              see what other gardeners are growing
+            </Link>
+            .
+          </p>
           <div className="mt-8 flex flex-wrap gap-2.5">
             {GOALS.map((g) => (
               <Link

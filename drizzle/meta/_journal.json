@@ -15,6 +15,13 @@
       "when": 1791406443573,
       "tag": "0001_ai_usage_and_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791436128530,
+      "tag": "0002_sharing_and_signin_codes",
+      "breakpoints": true
     }
   ]
 }

@@ -12,6 +12,9 @@ import { PLANTS_BY_ID } from "@/lib/garden/plants";
 import { PlantBadge, plantStage } from "./visuals";
 import { TaskItem, useTaskDone } from "./tasks";
 import { Button, ButtonLink, Card, Chip, Spinner, buttonClass, cx } from "@/components/ui";
+import type { PhotoMeta } from "@/lib/sharing";
+import { PhotoJournal } from "@/components/social/PhotoJournal";
+import { ShareCard } from "@/components/social/ShareCard";
 
 export interface GardenHomeProps {
   garden: { id: string; name: string; photo: string | null; status: "draft" | "active" | "archived" };
@@ -22,15 +25,29 @@ export interface GardenHomeProps {
   aiEnabled: boolean;
   serverToday: string;
   welcome: boolean;
+  photos: PhotoMeta[];
+  sharing: { isPublic: boolean; hidden: boolean; handle: string | null };
 }
 
-export function GardenHome({ garden, input, plan, doneTaskIds, journal: initialJournal, aiEnabled, serverToday, welcome }: GardenHomeProps) {
+export function GardenHome({
+  garden,
+  input,
+  plan,
+  doneTaskIds,
+  journal: initialJournal,
+  aiEnabled,
+  serverToday,
+  welcome,
+  photos,
+  sharing,
+}: GardenHomeProps) {
   const router = useRouter();
   const [today, setToday] = useState(serverToday);
   const tasks = useTaskDone(garden.id, doneTaskIds, true);
   const [name, setName] = useState(garden.name);
   const [editingName, setEditingName] = useState(false);
   const [showWelcome, setShowWelcome] = useState(welcome);
+  const [photoCount, setPhotoCount] = useState(photos.length);
 
   useEffect(() => {
     const local = todayISO();
@@ -199,6 +216,8 @@ export function GardenHome({ garden, input, plan, doneTaskIds, journal: initialJ
             </section>
           )}
 
+          <PhotoJournal gardenId={garden.id} initial={photos} editable onCountChange={setPhotoCount} />
+
           <HarvestLog gardenId={garden.id} plan={plan} initial={initialJournal} today={today} />
         </div>
 
@@ -235,6 +254,14 @@ export function GardenHome({ garden, input, plan, doneTaskIds, journal: initialJ
               })}
             </ul>
           </Card>
+
+          <ShareCard
+            gardenId={garden.id}
+            initialPublic={sharing.isPublic}
+            hidden={sharing.hidden}
+            initialHandle={sharing.handle}
+            hasPhotos={photoCount > 0}
+          />
 
           {aiEnabled && <AskPlantr gardenId={garden.id} today={today} />}
 

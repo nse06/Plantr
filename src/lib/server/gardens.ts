@@ -3,6 +3,7 @@ import { getDb, schema } from "@/db";
 import type { Garden, JournalEntry, User } from "@/db/schema";
 import type { GardenPlan, PlanInput } from "@/lib/garden/types";
 import { randomId } from "./crypto";
+import { deleteSharingFor } from "./social";
 
 // Data access for gardens, task completion and the garden journal.
 
@@ -28,6 +29,9 @@ export async function insertGarden(values: {
     input: values.input,
     plan: values.plan,
     photo: values.photo,
+    isPublic: false,
+    publishedAt: null,
+    hidden: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -82,6 +86,7 @@ export async function updateGarden(id: string, patch: Partial<Pick<Garden, "name
 // guaranteed over a stateless HTTP connection, so child rows are removed explicitly.
 export async function deleteGarden(id: string): Promise<void> {
   const db = getDb();
+  await deleteSharingFor([id]);
   await db.batch([
     db.delete(schema.taskStatus).where(eq(schema.taskStatus.gardenId, id)),
     db.delete(schema.journal).where(eq(schema.journal.gardenId, id)),
@@ -94,6 +99,7 @@ export async function deleteUserData(userId: string): Promise<void> {
   const db = getDb();
   const owned = await db.select({ id: schema.gardens.id }).from(schema.gardens).where(eq(schema.gardens.ownerId, userId));
   const ids = owned.map((g) => g.id);
+  await deleteSharingFor(ids, userId);
   if (ids.length) {
     await db.batch([
       db.delete(schema.taskStatus).where(inArray(schema.taskStatus.gardenId, ids)),

@@ -35,7 +35,11 @@ function draw(source: ImageBitmap | HTMLImageElement, maxDim: number, quality: n
   return canvas.toDataURL("image/jpeg", quality);
 }
 
-export async function prepareImage(file: File): Promise<{ full: string; thumb: string }> {
+/** Downscaled JPEG data URLs of a photo. Re-encoding also drops the photo's metadata (including GPS). */
+export async function prepareImage(
+  file: File,
+  sizes: { full: number; thumb: number } = { full: 1024, thumb: 480 },
+): Promise<{ full: string; thumb: string; width: number; height: number }> {
   if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
     throw new Error("That file isn't a photo.");
   }
@@ -45,8 +49,11 @@ export async function prepareImage(file: File): Promise<{ full: string; thumb: s
   } catch {
     throw new Error("We couldn't read that photo. Try a JPEG or PNG (on iPhone, use 'Most Compatible' camera format).");
   }
-  const full = draw(source, 1024, 0.85);
-  const thumb = draw(source, 480, 0.72);
+  const full = draw(source, sizes.full, 0.85);
+  const thumb = draw(source, sizes.thumb, 0.72);
+  const w = "naturalWidth" in source ? source.naturalWidth : source.width;
+  const h = "naturalHeight" in source ? source.naturalHeight : source.height;
+  const scale = Math.min(1, sizes.full / Math.max(w, h));
   if ("close" in source) source.close();
-  return { full, thumb };
+  return { full, thumb, width: Math.round(w * scale), height: Math.round(h * scale) };
 }
